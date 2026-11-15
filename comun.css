@@ -1,0 +1,40 @@
+/* Piezas comunes: visor de fotos, estado de apertura, día de hoy, menú móvil, accesibilidad.
+   Cada web define --acento y --fondo-visor si quiere. */
+.visor{border:0;padding:0;background:transparent;max-width:none;max-height:none;width:100vw;height:100vh;overflow:hidden}
+.visor::backdrop{background:rgba(10,10,10,.88)}
+.visor figure{margin:0;height:100%;display:grid;place-items:center;padding:56px 70px}
+.visor img{max-width:100%;max-height:calc(100vh - 140px);object-fit:contain;border-radius:4px}
+.visor figcaption{color:#eee;font-size:15px;margin-top:12px;text-align:center}
+.visor button{position:fixed;background:rgba(255,255,255,.12);color:#fff;border:0;width:52px;height:52px;border-radius:50%;font-size:30px;line-height:1;cursor:pointer}
+.visor button:hover{background:rgba(255,255,255,.25)}
+.visor-ant{left:14px;top:50%;transform:translateY(-50%)}
+.visor-sig{right:14px;top:50%;transform:translateY(-50%)}
+.visor-cerrar{right:14px;top:14px}
+[data-galeria] img{cursor:zoom-in}
+
+[data-abierto]{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+[data-abierto]::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;opacity:.5}
+[data-abierto].esta-abierto::before{background:#2fbf5b;opacity:1;box-shadow:0 0 0 4px rgba(47,191,91,.25)}
+[data-abierto].esta-cerrado::before{background:#d9534f;opacity:1}
+
+tr.hoy td{font-weight:700}
+tr.hoy td:first-child::after{content:" · hoy";font-weight:400;opacity:.75}
+
+.salta{position:absolute;left:-999px;top:0;z-index:99;padding:10px 16px;background:#fff;color:#000}
+.salta:focus{left:10px;top:10px}
+
+.mapa{width:100%;aspect-ratio:16/10;border:0;display:block;filter:saturate(.85)}
+
+details.faq{border-bottom:1px solid currentColor;padding:16px 0}
+details.faq summary{cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:16px}
+details.faq summary::-webkit-details-marker{display:none}
+details.faq summary::after{content:"+";font-size:1.4em;line-height:1}
+details.faq[open] summary::after{content:"–"}
+details.faq p{margin:10px 0 0;max-width:62ch}
+
+.resumen-pedido{margin-top:18px;padding:18px 20px;border:2px dashed currentColor;border-radius:10px}
+.resumen-pedido p{margin:0 0 8px;font-weight:700}
+.resumen-pedido ul{margin:0 0 14px;padding-left:1.1em}
+.llamar-pedido{display:inline-block;padding:12px 20px;border-radius:999px;background:#1f7a3e;color:#fff;font-weight:700;text-decoration:none}
+
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}

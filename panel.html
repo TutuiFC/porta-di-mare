@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Porta di Mare · Libro de reservas</title>
+<meta name="theme-color" content="#1c2340">
+<link rel="preload" href="fonts/BarlowCondensed-700normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="comun.css">
+<link rel="stylesheet" href="pdm.css?v=5">
+<link rel="stylesheet" href="panel.css?v=5">
+</head>
+<body class="panel cargando">
+<a class="salta" href="#agenda">Saltar a la agenda</a>
+
+<header class="barra">
+  <div class="barra-in">
+    <a class="barra-marca" href="index.html" aria-label="Porta di Mare, ver la web"><span class="mascara medallon-mask"></span><span class="mascara nombre-mask"></span></a>
+    <p class="barra-panel">Libro de reservas</p>
+    <a class="barra-web" href="index.html">Ver la web</a>
+    <button type="button" class="barra-salir" data-salir hidden>Salir</button>
+  </div>
+</header>
+
+<!-- Acceso: sin contraseña no se ve ninguna reserva -->
+<section class="sin-bd acceso" data-acceso hidden aria-labelledby="acceso-t">
+  <form class="hoja sin-bd-hoja acceso-hoja" data-login>
+    <p class="cinta">Acceso</p>
+    <h1 id="acceso-t" class="hoja-titulo">Libro de reservas</h1>
+    <label class="campo"><span>Email</span><input name="email" type="email" autocomplete="username" required></label>
+    <label class="campo"><span>Contraseña</span><input name="clave" type="password" autocomplete="current-password" required></label>
+    <p class="acceso-error" role="alert" data-login-error></p>
+    <button type="submit" class="boton boton-marino">Entrar</button>
+  </form>
+</section>
+
+<!-- Sin base de datos no hay panel -->
+<section class="sin-bd" data-sin-bd hidden aria-labelledby="sin-bd-t">
+  <div class="hoja sin-bd-hoja">
+    <p class="cinta">Sin conexión</p>
+    <h1 id="sin-bd-t" class="hoja-titulo">No se puede abrir la base de datos</h1>
+    <p>El libro de reservas no consigue conectar con Supabase. Comprueba la conexión a internet y vuelve a intentarlo.</p>
+    <p data-sin-config hidden>Falta conectar la base de datos: rellena <b>supabase-config.js</b> con la URL y la clave pública del proyecto (los pasos están en SUPABASE.md).</p>
+    <button type="button" class="boton boton-marino" data-reintentar>Reintentar</button>
+  </div>
+</section>
+
+<main>
+  <!-- El día que se está mirando -->
+  <section class="dia" aria-labelledby="dia-titulo">
+    <div class="dia-in">
+      <div class="dia-texto">
+        <p class="lema" data-dia-rel>Hoy</p>
+        <h1 id="dia-titulo" class="titulo" data-dia-titulo>—</h1>
+        <p class="estado" data-dia-estado></p>
+      </div>
+      <dl class="cifras">
+        <div class="cifra"><dt>Comida</dt><dd data-cifra="Comida">0</dd></div>
+        <div class="cifra"><dt>Cena</dt><dd data-cifra="Cena">0</dd></div>
+        <div class="cifra" data-cifra-pend-caja><dt>Por confirmar</dt><dd data-cifra="pend">0</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- La tabla de pino: la semana -->
+  <nav class="tabla-pino" aria-label="Elegir día">
+    <div class="tabla-in">
+      <div class="semana-bloque">
+        <p class="etq" data-mes>Semana</p>
+        <div class="semana-nav">
+          <button type="button" class="paso" data-paso="-7" aria-label="Semana anterior"><span class="flecha flecha-izq" aria-hidden="true"></span></button>
+          <ol class="dias" data-dias></ol>
+          <button type="button" class="paso" data-paso="7" aria-label="Semana siguiente"><span class="flecha" aria-hidden="true"></span></button>
+        </div>
+      </div>
+      <div class="pino-acc">
+        <button type="button" class="boton boton-hueco-tinta" data-hoy>Hoy</button>
+        <button type="button" class="boton" data-abrir-nueva>Nueva reserva</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- La agenda: horas y reservas -->
+  <section class="servicios" id="agenda" aria-label="Agenda de reservas">
+    <div class="servicios-in">
+      <div class="hoja agenda" data-agenda>
+        <div class="agenda-cab">
+          <p class="cinta" data-agenda-titulo>Semana</p>
+          <div class="vistas" role="group" aria-label="Vista">
+            <button type="button" data-vista="dia" aria-pressed="false">Día</button>
+            <button type="button" data-vista="semana" aria-pressed="true">Semana</button>
+          </div>
+        </div>
+        <div data-grid></div>
+        <p class="agenda-nota">Pulsa una reserva para verla, confirmarla o marcar que ha llegado.</p>
+      </div>
+
+      <aside class="lateral" aria-label="Pendientes">
+        <section class="pendientes" aria-labelledby="t-pend">
+          <h2 id="t-pend" class="titulo titulo-s">Por confirmar</h2>
+          <p class="nota">Peticiones que han entrado por la web y aún no tienen respuesta.</p>
+          <ol class="pend-lista" data-pendientes></ol>
+        </section>
+
+        <section class="leyenda" aria-labelledby="t-ley">
+          <h2 id="t-ley" class="etq">Colores</h2>
+          <ul>
+            <li><span class="muestra ev-pendiente"></span>Por confirmar</li>
+            <li><span class="muestra ev-confirmada"></span>Confirmada</li>
+            <li><span class="muestra ev-llegada"></span>Ha llegado</li>
+            <li><span class="muestra ev-novino"></span>No vino o anulada</li>
+          </ul>
+        </section>
+
+        <label class="ajuste"><span>Cubiertos por servicio</span><input name="aforo" type="number" min="1" max="300" inputmode="numeric" data-aforo-input></label>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<footer class="pie">
+  <div class="pie-in">
+    <span class="mascara medallon-mask pie-medallon" aria-hidden="true"></span>
+    <div>
+      <p>Porta di Mare · Libro de reservas · Carrer d'Enric Granados, 97 · Premià de Mar</p>
+      <p class="pie-nota">Las reservas se guardan en Supabase. Las que llegan desde el formulario de la web o desde el asistente aparecen aquí como «Por confirmar».</p>
+    </div>
+  </div>
+</footer>
+
+<!-- Ficha de una reserva -->
+<dialog class="dlg" data-ficha aria-labelledby="ficha-n">
+  <div class="hoja dlg-hoja">
+    <button type="button" class="dlg-cerrar" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+    <p class="cinta" data-ficha-hora>21:00</p>
+    <h2 id="ficha-n" class="ficha-n" data-ficha-n>—</h2>
+    <p class="ficha-cuando" data-ficha-cuando></p>
+    <dl class="ficha-datos" data-ficha-datos></dl>
+    <div class="ficha-acc" data-ficha-acc></div>
+  </div>
+</dialog>
+
+<!-- Nueva reserva -->
+<dialog class="dlg" data-dlg-nueva aria-labelledby="nueva-t">
+  <form class="hoja hoja-form dlg-hoja nueva" data-nueva novalidate>
+    <button type="button" class="dlg-cerrar" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+    <h2 id="nueva-t" class="hoja-titulo">Apuntar reserva</h2>
+    <div class="campos">
+      <label class="campo ancho"><span>Nombre</span><input name="n" required autocomplete="off"></label>
+      <label class="campo"><span>Personas</span><input name="p" type="number" min="1" max="80" inputmode="numeric" required></label>
+      <label class="campo"><span>Teléfono</span><input name="tel" type="tel" inputmode="tel" autocomplete="off" placeholder="Opcional"></label>
+      <label class="campo"><span>Día</span><input name="d" type="date" required></label>
+      <label class="campo"><span>Hora</span><input name="h" type="time" step="900" required></label>
+      <label class="campo"><span>Servicio</span>
+        <select name="s" required>
+          <option>Comida</option>
+          <option>Cena</option>
+        </select></label>
+      <label class="campo"><span>Mesa</span><input name="mesa" autocomplete="off" placeholder="Opcional"></label>
+      <label class="campo ancho"><span>Notas</span><input name="x" autocomplete="off" placeholder="Celebración, alergias, terraza…"></label>
+      <label class="campo ancho"><span>Ha llegado por</span>
+        <select name="origen">
+          <option>Teléfono</option>
+          <option>WhatsApp</option>
+          <option>En sala</option>
+        </select></label>
+    </div>
+    <button class="boton boton-marino" type="submit">Apuntar</button>
+  </form>
+</dialog>
+
+<p class="sr" aria-live="polite" data-anuncio></p>
+<p class="aviso-bd" role="alert" data-aviso-bd hidden></p>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=1"></script>
+<script src="panel.js?v=6"></script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Porta di Mare · Ristorante · Terrazza · Premià de Mar</title>
+<meta name="description" content="Porta di Mare, ristorante italiano con horno de leña y terraza en Premià de Mar. Carta de pizzas con precios y reservas por WhatsApp.">
+<meta name="theme-color" content="#1c2340">
+<link rel="preload" href="fonts/BarlowCondensed-700normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="comun.css">
+<link rel="stylesheet" href="pdm.css?v=5">
+<link rel="stylesheet" href="chat.css?v=2">
+</head>
+<body>
+<a class="salta" href="#carta">Saltar a la carta</a>
+
+<header class="barra">
+  <div class="barra-in">
+    <a class="barra-marca" href="#inicio" aria-label="Porta di Mare, inicio"><span class="mascara medallon-mask"></span><span class="mascara nombre-mask"></span></a>
+    <nav class="barra-nav" aria-label="Secciones">
+      <a href="#carta" data-t="nav.carta">Carta</a>
+      <a href="#forno" data-t="nav.forno">Dal forno</a>
+      <a href="#terrazza" data-t="nav.terrazza">Terrazza</a>
+      <a href="#reserva" data-t="nav.reserva">Reservar</a>
+    </nav>
+    <div class="idiomas" role="group" aria-label="Idioma" data-t-attr="aria-label:nav.idioma">
+      <button type="button" data-lang="es" aria-pressed="true" lang="es" aria-label="Castellano">ES</button>
+      <button type="button" data-lang="ca" aria-pressed="false" lang="ca" aria-label="Català">CA</button>
+      <button type="button" data-lang="en" aria-pressed="false" lang="en" aria-label="English">EN</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- La mesa puesta -->
+  <section class="mesa" id="inicio" aria-labelledby="titulo">
+    <div class="mesa-in">
+      <div class="casa">
+        <h1 id="titulo" class="sr">Porta di Mare · Ristorante · Terrazza · Crew</h1>
+        <span class="mascara medallon-mask medallon-grande" aria-hidden="true"></span>
+        <span class="mascara nombre-mask nombre-grande" aria-hidden="true"></span>
+        <p class="lema">Ristorante · Terrazza · Crew</p>
+        <p class="linea" data-t="hero.linea">Cocina italiana con producto traído de Italia, pizza al horno de leña y terraza en la calle Enric Granados.</p>
+      </div>
+
+      <div class="hoja hoja-mesa">
+        <p class="cinta" data-t="carta.tradizionali">Tradizionali</p>
+        <ul class="platos" data-carta="pizzas" data-limite="6"></ul>
+        <a class="hoja-mas" href="#carta"><span data-t="carta.titulo">La carta</span><span class="flecha" aria-hidden="true"></span></a>
+      </div>
+
+      <figure class="plato-mesa" aria-hidden="true">
+        <img src="img/plato.png" alt="" width="820" height="820">
+      </figure>
+    </div>
+
+    <div class="tabla-pino">
+      <div class="tabla-in">
+        <div class="semana-bloque">
+          <p class="etq" data-t="semana">Esta semana</p>
+          <ol class="semana" data-semana></ol>
+        </div>
+        <p class="estado" data-estado aria-live="polite"></p>
+        <a class="boton" data-wa-link href="https://wa.me/34633450654" target="_blank" rel="noopener"><span data-t="hero.reservar">Reservar por WhatsApp</span> · 633 45 06 54</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- La carta completa, como su hoja impresa -->
+  <section class="seccion-carta" id="carta" aria-labelledby="carta-titulo">
+    <div class="hoja hoja-grande">
+      <h2 id="carta-titulo" class="hoja-titulo" data-t="carta.titulo">La carta</h2>
+      <div class="hoja-cols">
+        <div>
+          <h3 class="cinta" data-t="carta.tradizionali">Tradizionali</h3>
+          <ul class="platos" data-carta="pizzas"></ul>
+        </div>
+        <div>
+          <h3 class="cinta" data-t="carta.calzone">Calzone</h3>
+          <ul class="platos" data-carta="calzone"></ul>
+          <div class="recuadro">
+            <h3 class="recuadro-t" data-t="carta.supl">Suplementos de pizza</h3>
+            <ul class="platos platos-supl" data-carta="suplementos"></ul>
+          </div>
+          <p class="hoja-nota"><span class="vegetal" aria-hidden="true"></span> <span data-t="carta.vegetal">Pizza vegetal, con verduras</span></p>
+          <p class="hoja-nota" data-t="carta.nota">Antipasti, pasta y postres: en la carta del local. Precios con IVA.</p>
+          <p class="hoja-nota alerg" data-t="carta.alerg">Los productos pueden contener huevo, gluten, pescado, frutos de cáscara o lácteos. Consúltanos antes de pedir.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dal forno: el horno y los platos de mayólica -->
+  <section class="forno" id="forno" aria-labelledby="forno-titulo">
+    <div class="forno-in">
+      <figure class="foto foto-horno">
+        <img src="img/p/165.jpg" alt="El horno de leña de Porta di Mare encendido" loading="lazy" width="800" height="800">
+      </figure>
+      <div class="forno-texto">
+        <h2 id="forno-titulo" class="titulo" data-t="forno.titulo">Dal forno</h2>
+        <p data-t="forno.texto">Las pizzas salen del horno de leña de la sala. Los platos, en mayólica azul.</p>
+        <p class="nota" data-t="forno.nota">Platos fotografiados por los clientes.</p>
+      </div>
+      <ul class="platos-foto" data-galeria>
+        <li class="foto"><img src="img/p/009.jpg" alt="Pizza margherita con albahaca, vista desde arriba" loading="lazy" width="800" height="800"><span class="pie-foto" data-t="p.009">Margherita</span></li>
+        <li class="foto"><img src="img/p/097.jpg" alt="Panna cotta con frutos rojos en plato negro" loading="lazy" width="800" height="800"><span class="pie-foto" data-t="p.097">Panna cotta</span></li>
+        <li class="foto"><img src="img/p/030.jpg" alt="Espaguetis con marisco en plato de mayólica" loading="lazy" width="800" height="800"><span class="pie-foto" data-t="p.030">Spaghetti ai frutti di mare</span></li>
+        <li class="foto"><img src="img/p/005.jpg" alt="Pizza con mortadela, burrata y pesto de pistacho" loading="lazy" width="800" height="800"><span class="pie-foto" data-t="p.005">Pizza con mortadela y pistacho</span></li>
+        <li class="foto"><img src="img/p/121.jpg" alt="Carpaccio de tomate con burrata en plato azul" loading="lazy" width="800" height="800"><span class="pie-foto" data-t="p.121">Carpaccio de tomate</span></li>
+        <li class="foto"><img src="img/p/052.jpg" alt="Burrata con verduras fritas en plato de mayólica azul, vista desde arriba" loading="lazy" width="800" height="800"><span class="pie-foto" data-t="p.052">Burrata</span></li>
+        <li class="foto"><img src="img/p/029.jpg" alt="Tiramisù con cacao, visto desde arriba" loading="lazy" width="800" height="800"><span class="pie-foto" data-t="p.014">Tiramisù</span></li>
+        <li class="foto"><img src="img/p/147.jpg" alt="Una pizza dentro del horno de leña" loading="lazy" width="800" height="800"><span class="pie-foto">Forno a legna</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Terrazza: de noche, grupos y opiniones -->
+  <section class="terrazza" id="terrazza" aria-labelledby="terr-titulo">
+    <div class="terr-in">
+      <figure class="foto foto-rotulo">
+        <img src="img/p/001v.jpg" alt="El rótulo iluminado «Porta di Mare · Ristorante Club» y la terraza de noche" loading="lazy" width="900" height="1350">
+      </figure>
+      <div class="terr-texto">
+        <h2 id="terr-titulo" class="titulo" data-t="terr.titulo">Terrazza</h2>
+        <p data-t="terr.texto">Mesas fuera y dentro, hasta las once de la noche de miércoles a domingo.</p>
+        <h3 class="sub" data-t="terr.grupos">Grupos y celebraciones</h3>
+        <p data-t="terr.grupos.t">Para cenas de grupo, cumpleaños o empresa, escríbenos y preparamos la mesa.</p>
+        <div class="opiniones">
+          <h3 class="sub" data-t="op.titulo">4,4 de 5 en Google · 702 opiniones</h3>
+          <ul>
+            <li data-t="op.t1">Producto italiano: vitello tonnato, pizzas grandes, tiramisù.</li>
+            <li data-t="op.t2">Servicio atento y ambiente tranquilo.</li>
+            <li data-t="op.t3">Muchas opiniones en inglés: vienen también de fuera.</li>
+          </ul>
+          <p class="nota" data-t="op.nota">Lo que más se repite en sus opiniones de Google</p>
+        </div>
+      </div>
+      <figure class="foto foto-mesa">
+        <img src="img/p/072v.jpg" alt="Una mesa puesta con camino azul marino y platos de mayólica junto a la terraza acristalada" loading="lazy" width="800" height="1422">
+      </figure>
+    </div>
+  </section>
+
+  <div class="cenefa" aria-hidden="true"></div>
+  <!-- Reservar y horario -->
+  <section class="reserva" id="reserva" aria-labelledby="res-titulo">
+    <div class="reserva-in">
+      <form class="hoja hoja-form" data-wa="34633450654" data-intro="Hola Porta di Mare, quiero reservar:" data-t-attr="data-intro:f.intro">
+        <h2 id="res-titulo" class="hoja-titulo" data-t="res.titulo">Reservar mesa</h2>
+        <p data-t="res.texto">Rellena los datos y se abre WhatsApp con el mensaje escrito. Te confirmamos la mesa.</p>
+        <div class="campos">
+          <label class="campo ancho"><span data-t="f.nombre">Nombre</span><input name="n" required autocomplete="name" data-etiqueta="Nombre" data-t-attr="data-etiqueta:f.nombre"></label>
+          <label class="campo"><span data-t="f.personas">Personas</span><input name="p" type="number" min="1" max="60" inputmode="numeric" required data-etiqueta="Personas" data-t-attr="data-etiqueta:f.personas"></label>
+          <label class="campo"><span data-t="f.dia">Día</span><input name="d" type="date" required data-etiqueta="Día" data-t-attr="data-etiqueta:f.dia"></label>
+          <label class="campo"><span data-t="f.servicio">Servicio</span>
+            <select name="s" required data-etiqueta="Servicio" data-t-attr="data-etiqueta:f.servicio">
+              <option value="" data-t="f.elige">Elige</option>
+              <option data-t="f.comida">Comida</option>
+              <option data-t="f.cena">Cena</option>
+            </select></label>
+          <label class="campo"><span data-t="f.hora">Hora</span><input name="h" type="time" required data-etiqueta="Hora" data-t-attr="data-etiqueta:f.hora"></label>
+          <label class="campo ancho"><span data-t="f.notas">Celebración, alergias o comentarios</span><textarea name="x" rows="2" data-etiqueta="Comentarios" data-t-attr="data-etiqueta:f.notas"></textarea></label>
+        </div>
+        <button class="boton boton-marino" type="submit" data-t="f.enviar">Enviar por WhatsApp</button>
+        <button class="chat-alt" type="button" data-abrir-chat hidden>O resérvalo hablando con el asistente</button>
+      </form>
+
+      <div class="info">
+        <h2 class="titulo" data-t="info.horario">Horario</h2>
+        <dl class="tabla">
+          <div class="fila cerrada" data-dia="1"><dt data-dl="1">Lunes</dt><dd data-t="cerrado">Cerrado</dd></div>
+          <div class="fila cerrada" data-dia="2"><dt data-dl="2">Martes</dt><dd data-t="cerrado">Cerrado</dd></div>
+          <div class="fila" data-dia="3"><dt data-dl="3">Miércoles</dt><dd>12:00–16:00 · 20:00–23:00</dd></div>
+          <div class="fila" data-dia="4"><dt data-dl="4">Jueves</dt><dd>12:00–16:00 · 20:00–23:00</dd></div>
+          <div class="fila" data-dia="5"><dt data-dl="5">Viernes</dt><dd>12:00–16:00 · 20:00–23:00</dd></div>
+          <div class="fila" data-dia="6"><dt data-dl="6">Sábado</dt><dd>12:00–16:00 · 20:00–23:00</dd></div>
+          <div class="fila" data-dia="0"><dt data-dl="0">Domingo</dt><dd>12:00–16:00 · 20:00–23:00</dd></div>
+        </dl>
+        <p class="estado" data-estado></p>
+        <h2 class="titulo info-donde" data-t="info.donde">Dónde estamos</h2>
+        <p class="direccion">Carrer d'Enric Granados, 97<br>08330 Premià de Mar</p>
+        <div class="acciones">
+          <a class="boton boton-claro" href="tel:+34633450654"><span data-t="info.llamar">Llamar</span> · 633 45 06 54</a>
+          <a class="boton boton-hueco" href="https://www.google.com/maps/search/?api=1&amp;query=Porta+di+Mare+Carrer+d%27Enric+Granados+97+Premi%C3%A0+de+Mar" target="_blank" rel="noopener" data-t="info.como">Cómo llegar</a>
+        </div>
+        
+      </div>
+      <iframe class="mapa" title="Mapa: Porta di Mare en Premià de Mar" loading="lazy" src="https://www.google.com/maps?q=Porta+di+Mare+Carrer+d%27Enric+Granados+97+Premi%C3%A0+de+Mar&amp;output=embed"></iframe>
+    </div>
+  </section>
+</main>
+
+<footer class="pie">
+  <div class="pie-in">
+    <span class="mascara medallon-mask pie-medallon" aria-hidden="true"></span>
+    <div>
+      <p>Porta di Mare · Carrer d'Enric Granados, 97 · Premià de Mar · 633 45 06 54 · @portadimare.ristorante</p>
+      <p class="pie-nota" data-t="pie.nota">Propuesta de web. La carta es la de una foto de Google Maps; platos, precios y textos pendientes de confirmar con el restaurante.</p>
+    </div>
+  </div>
+</footer>
+
+<nav class="barra-movil" aria-label="Contacto rápido">
+  <a href="tel:+34633450654" data-t="info.llamar">Llamar</a>
+  <a class="wa" data-wa-link href="https://wa.me/34633450654" target="_blank" rel="noopener">WhatsApp</a>
+</nav>
+
+<script src="supabase-config.js?v=1"></script>
+<script src="carta.js?v=1"></script>
+<script src="pdm.js?v=4"></script>
+<script src="app.js?v=1"></script>
+<script src="chat.js?v=4"></script>
+</body>
+</html>

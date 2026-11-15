@@ -1,0 +1,221 @@
+/* Porta di Mare · libro de reservas. Misma mesa que la web: camino marino, tabla de pino, hoja de papel.
+   La agenda es una hoja impresa con las horas a la izquierda y las reservas como bloques de tinta. */
+body.panel{padding-bottom:0}
+
+/* Sin base de datos: no se enseña nada del panel, solo cómo arrancarla */
+body.cargando main,body.cargando .pie,body.sin-bd main,body.sin-bd .pie,body.sin-sesion main,body.sin-sesion .pie{display:none}
+.acceso-hoja{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.acceso-hoja .hoja-titulo{margin-bottom:6px}
+.acceso-hoja .boton{align-self:flex-start;margin-top:0}
+.acceso-error{min-height:1.4em;font-weight:600;font-size:16px!important;color:var(--terracota-tinta);margin:0!important}
+.barra-salir{font:700 16px/1 "Barlow Condensed",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--papel);background:none;border:2px solid var(--mayolica);padding:8px 12px;cursor:pointer}
+.barra-salir:hover{border-color:var(--terracota);color:var(--terracota)}
+.sin-bd{max-width:760px;margin:0 auto;padding:72px 20px 96px}
+.sin-bd-hoja{transform:rotate(-.5deg)}
+.sin-bd-hoja .hoja-titulo{font-size:clamp(34px,5vw,52px);margin-bottom:18px}
+.sin-bd-hoja p{font-size:18px;margin-bottom:12px;max-width:52ch}
+.sin-bd-cmd{font:700 20px/1 ui-monospace,Consolas,monospace;background:var(--tinta);color:var(--papel);padding:16px 18px;margin:4px 0 18px;overflow-x:auto}
+.sin-bd-hoja .boton{margin-top:10px}
+.aviso-bd{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;max-width:calc(100vw - 32px);background:var(--tinta);color:var(--papel);border-left:6px solid var(--terracota);padding:14px 18px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+
+/* ——— Barra ——— */
+.barra-panel{font:700 17px/1 "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--pino);padding-left:20px;border-left:2px solid var(--mayolica)}
+.barra-web{margin-left:auto;font:700 16px/1 "Barlow Condensed",sans-serif;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;padding:6px 0;border-bottom:2px solid var(--pino)}
+.barra-web:hover{color:var(--terracota);border-color:var(--terracota)}
+
+/* ——— El día ——— */
+.dia-in{display:flex;align-items:flex-end;justify-content:space-between;gap:28px 48px;flex-wrap:wrap;max-width:1280px;margin:0 auto;padding:44px 28px 38px}
+.dia-texto{display:flex;flex-direction:column;gap:12px}
+.dia-texto .estado{color:var(--papel)}
+.dia-texto .estado.cerrado{color:#b9bed4}
+.cifras{display:flex;margin:0}
+.cifra{padding:2px 26px;border-left:2px solid var(--mayolica)}
+.cifra dt{font:700 13px/1 "Barlow Condensed",sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--pino);margin-bottom:8px}
+.cifra dd{font:800 56px/1 "Barlow Condensed",sans-serif;color:var(--blanco);font-variant-numeric:tabular-nums}
+.cifra.aviso dd{color:var(--terracota)}
+
+/* ——— La semana en la tabla de pino ——— */
+.semana-nav{display:flex;align-items:stretch}
+.dias{list-style:none;padding:0;margin:0;display:flex}
+.dias button,.paso{font:700 16px/1 "Barlow Condensed",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--tinta);background:var(--papel);border:2px solid var(--tinta);margin-right:-2px;cursor:pointer}
+.dias button{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:68px;padding:9px 8px 8px;position:relative}
+.dias .num{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+.dias .pax{font:600 13px/1 "Barlow",sans-serif;letter-spacing:0;text-transform:none;color:var(--gris)}
+.dias button.cerrado{background:transparent;color:#6b6f7f}
+.dias button.cerrado .d,.dias button.cerrado .num{text-decoration:line-through;text-decoration-thickness:2px}
+.dias button.cerrado .pax{color:#6b6f7f}
+.dias button:hover{background:var(--pino-veta)}
+.dias button[aria-pressed="true"]{background:var(--terracota);z-index:1}
+.dias button[aria-pressed="true"] .pax{color:var(--tinta)}
+.dias button.hoy .d::before{content:"";display:inline-block;width:15px;height:15px;margin-right:4px;vertical-align:-2px;background:url(img/medallon.png) center/contain no-repeat;filter:brightness(0)}
+.paso{display:grid;place-items:center;width:46px;background:transparent}
+.paso:hover{background:var(--tinta);color:var(--papel)}
+.paso:last-child{margin-right:0;margin-left:2px}
+.flecha-izq{transform:scaleX(-1)}
+.pino-acc{display:flex;gap:10px;margin-left:auto}
+.tabla-pino .pino-acc .boton{margin-left:0}
+.boton-hueco-tinta{background:transparent;border-color:var(--tinta);color:var(--tinta)}
+.boton-hueco-tinta:hover,.boton-hueco-tinta:active{background:var(--tinta);color:var(--papel)}
+
+/* ——— La agenda en lista ——— */
+.servicios{background:var(--marino-2);border-top:2px solid var(--mayolica)}
+.servicios-in{display:grid;grid-template-columns:minmax(0,1fr);gap:44px;max-width:1280px;margin:0 auto;padding:48px 28px 84px;align-items:start}
+.agenda{padding:28px 32px 22px;min-width:0}
+.agenda-cab{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.agenda-cab .cinta{margin-bottom:0}
+.vistas{display:flex}
+.vistas button{font:800 15px/1 "Barlow Condensed",sans-serif;letter-spacing:.1em;text-transform:uppercase;padding:10px 16px;border:2px solid var(--tinta);margin-left:-2px;background:transparent;color:var(--tinta);cursor:pointer}
+.vistas button[aria-pressed="true"]{background:var(--tinta);color:var(--papel)}
+.vistas button:hover:not([aria-pressed="true"]){background:rgba(22,24,42,.08)}
+.agenda-nota{font-size:14px;color:var(--gris);margin-top:16px}
+
+.lista{list-style:none;padding:0;margin:0}
+.l-dia{display:grid;grid-template-columns:96px minmax(0,1fr);gap:0 24px;padding:22px 0;border-top:2px solid var(--tinta)}
+.l-dia:first-child{border-top:0}
+.vista-dia .l-dia{grid-template-columns:minmax(0,1fr)}
+.vista-dia .l-fecha{display:none}
+.l-fecha{display:flex;flex-direction:column;align-items:flex-start;gap:4px;align-self:start;background:none;border:0;padding:0;color:var(--tinta);text-align:left;font:inherit;cursor:pointer}
+div.l-fecha{cursor:default}
+.l-num{font:800 46px/.9 "Barlow Condensed",sans-serif;font-variant-numeric:tabular-nums}
+.l-d{font:700 14px/1 "Barlow Condensed",sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--gris)}
+.l-hoy{font:800 13px/1 "Barlow Condensed",sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--papel);background:var(--tinta);padding:4px 7px;margin-top:4px}
+button.l-fecha:hover .l-num{color:var(--mayolica)}
+.l-dia.hoy .l-num{color:var(--terracota-tinta);text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:5px}
+.l-dia.cerrado{padding:14px 0}
+.l-dia.cerrado .l-num,.l-dia.cerrado .l-d{color:#8a8ea0}
+.l-dia.cerrado .l-num{font-size:30px;text-decoration:line-through;text-decoration-thickness:2px}
+.l-cerrado{padding-top:4px;font:700 17px/1.2 "Barlow Condensed",sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8ea0}
+.l-cuerpo{display:flex;flex-direction:column;gap:20px;min-width:0}
+
+.l-serv-cab{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;padding-bottom:8px;border-bottom:2px solid var(--tinta)}
+.l-serv-t{font:800 22px/1 "Barlow Condensed",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--mayolica)}
+.l-serv-h{font:700 15px/1 "Barlow Condensed",sans-serif;letter-spacing:.08em;color:var(--gris);font-variant-numeric:tabular-nums}
+.l-ocupa{margin-left:auto;font-size:14px;color:var(--gris);white-space:nowrap}
+.l-ocupa b{font:800 19px/1 "Barlow Condensed",sans-serif;color:var(--tinta);font-variant-numeric:tabular-nums}
+.l-ocupa.lleno b{color:var(--terracota-tinta)}
+.l-barra{width:120px;height:10px;border:2px solid var(--tinta)}
+.l-barra i{display:block;height:100%;background:var(--mayolica)}
+.l-ocupa.lleno+.l-barra i{background:var(--terracota-tinta)}
+
+.l-res{list-style:none;padding:0;margin:0}
+.l-vacio{padding:12px 0;color:var(--gris);font-size:15px}
+.fr{display:grid;grid-template-columns:62px 14px minmax(0,1fr) 64px 132px;align-items:center;gap:0 14px;width:100%;padding:11px 8px;background:none;border:0;border-bottom:1px solid #dfe1e8;color:var(--tinta);text-align:left;font:inherit;cursor:pointer}
+.fr:hover{background:rgba(42,74,116,.07)}
+.fr-hora{display:flex;flex-direction:column;gap:2px;font-variant-numeric:tabular-nums}
+.fr-hora b{font:800 20px/1 "Barlow Condensed",sans-serif;color:var(--mayolica)}
+.fr-hora span{font:600 13px/1 "Barlow",sans-serif;color:var(--gris)}
+.fr-marca{width:14px;height:14px}
+.fr-cuerpo{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fr-n{font:700 20px/1.1 "Barlow Condensed",sans-serif;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-d{font-size:15px;line-height:1.3;color:var(--gris);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-pax{font:700 19px/1 "Barlow Condensed",sans-serif;color:var(--terracota-tinta);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.fr-sello{justify-self:start;margin:0;font-size:13px;padding:6px 8px}
+.fr-novino .fr-n,.fr-anulada .fr-n{text-decoration:line-through;text-decoration-thickness:2px;color:var(--gris)}
+.fr-novino .fr-hora b,.fr-anulada .fr-hora b,.fr-novino .fr-pax,.fr-anulada .fr-pax{color:var(--gris)}
+.fr-llegada .fr-hora b{color:#1f5c38}
+.fr.nuevo{animation:imprime .6s cubic-bezier(.16,1,.3,1) both}
+.l-ahora{display:flex;align-items:center;gap:10px;font:800 13px/1 "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--terracota-tinta);padding:6px 0}
+.l-ahora::after{content:"";flex:1;height:2px;background:var(--terracota)}
+
+/* Muestras de color: leyenda y marca de cada fila */
+.muestra.ev-confirmada{background:var(--mayolica)}
+.muestra.ev-pendiente{background:var(--papel);border:2px dashed var(--terracota-tinta)}
+.muestra.ev-llegada{background:var(--pino);border:2px solid #1f5c38}
+.muestra.ev-novino,.muestra.ev-anulada{background:#d3d6de}
+
+/* ——— Debajo de la agenda: pendientes, colores y aforo ——— */
+.lateral{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:30px 56px;align-items:start}
+.lateral .pendientes{grid-row:span 2}
+.pend-lista{columns:2;column-gap:36px}
+.pend-lista li{break-inside:avoid}
+.titulo-s{font-size:40px}
+.pendientes .nota{margin-top:8px}
+.pend-lista{list-style:none;padding:0;margin:14px 0 0;border-top:2px solid var(--mayolica)}
+.pend-lista button{display:grid;gap:4px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid rgba(248,248,245,.3);color:var(--papel);padding:12px 0;cursor:pointer;font:400 17px/1.3 "Barlow",sans-serif}
+.pend-f{font:700 15px/1 "Barlow Condensed",sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--pino)}
+.pend-n{font:700 20px/1.1 "Barlow Condensed",sans-serif;letter-spacing:.02em}
+.pend-lista button:hover .pend-n{color:var(--terracota)}
+.pend-vacio{padding:14px 0;color:#c7cbe0;border-bottom:1px solid rgba(248,248,245,.3)}
+.leyenda .etq{color:var(--pino)}
+.leyenda ul{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:8px;font-size:16px}
+.leyenda li{display:flex;align-items:center;gap:10px}
+.muestra{display:inline-block;width:26px;height:18px;flex:none}
+.ajuste{display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:2px solid var(--mayolica);padding-top:16px}
+.ajuste span{font:700 14px/1.2 "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--pino)}
+.ajuste input{width:90px;font:800 24px/1 "Barlow Condensed",sans-serif;color:var(--blanco);background:transparent;border:0;border-bottom:2px solid var(--papel);border-radius:0;padding:6px 2px;text-align:right;font-variant-numeric:tabular-nums}
+.ajuste input:focus-visible{outline:2px solid var(--terracota);outline-offset:2px}
+
+/* ——— Ventanas: ficha y nueva reserva ——— */
+.dlg{border:0;padding:0;background:transparent;width:min(560px,calc(100vw - 24px));max-width:none;max-height:calc(100vh - 24px);overflow:visible;color:var(--tinta)}
+.dlg::backdrop{background:rgba(28,35,64,.88)}
+.dlg-hoja{position:relative;padding:34px 34px 30px;max-height:calc(100vh - 24px);overflow:auto}
+.dlg-cerrar{position:absolute;top:12px;right:12px;width:44px;height:44px;display:grid;place-items:center;border:2px solid var(--tinta);background:transparent;color:var(--tinta);cursor:pointer}
+.dlg-cerrar:hover{background:var(--tinta);color:var(--papel)}
+.ficha-n{font:800 clamp(32px,6vw,44px)/1 "Barlow Condensed",sans-serif;text-transform:uppercase;color:var(--mayolica);padding-right:50px}
+.ficha-cuando{font-size:18px;color:var(--gris);margin-top:6px}
+.ficha-datos{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;margin:20px 0 0;padding-top:16px;border-top:2px solid var(--tinta)}
+.ficha-datos dt{font:700 14px/1.4 "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--mayolica)}
+.ficha-datos dd{font-size:18px}
+.ficha-acc{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:24px;padding-top:18px;border-top:1px solid #c9ccd6}
+.sello{font:800 14px/1 "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border:2px solid currentColor;margin-right:6px;white-space:nowrap}
+.est-pendiente{color:var(--terracota-tinta);border-style:dashed}
+.est-confirmada{color:var(--mayolica)}
+.est-llegada{color:#1f5c38}
+.est-novino,.est-anulada{color:var(--gris)}
+.accion{font:700 15px/1 "Barlow Condensed",sans-serif;letter-spacing:.08em;text-transform:uppercase;padding:10px 12px;border:2px solid var(--tinta);background:transparent;color:var(--tinta);cursor:pointer;text-decoration:none;white-space:nowrap;transition:background-color .15s,color .15s}
+.accion:hover{background:var(--tinta);color:var(--papel)}
+.accion.principal{background:var(--marino);border-color:var(--marino);color:var(--blanco)}
+.accion.principal:hover{background:transparent;color:var(--marino)}
+.accion.wa{border-color:#1f5c38;color:#1f5c38}
+.accion.wa:hover{background:#1f5c38;color:var(--blanco)}
+.nueva .hoja-titulo{font-size:40px;padding-right:50px}
+.nueva .campos{gap:14px 20px}
+
+.pie-boton{margin-left:auto;padding:11px 16px;font-size:15px}
+
+@media (max-width:1060px){
+  .lateral{grid-template-columns:1fr 1fr;gap:30px 36px}
+  .lateral .pendientes{grid-column:1 / -1;grid-row:auto}
+}
+@media (max-width:760px){
+  .barra-panel{display:none}
+  .dia-in{padding:32px 16px 28px}
+  .cifras{width:100%}
+  .cifra{flex:1;padding:2px 14px}
+  .cifra:first-child{padding-left:0;border-left:0}
+  .cifra dd{font-size:42px}
+  .semana-bloque,.semana-nav{width:100%}
+  .dias{flex:1;min-width:0}
+  .dias li{flex:1;min-width:0}
+  .dias button{min-width:0;width:100%;padding:8px 0;font-size:14px;letter-spacing:.02em}
+  .dias .num{font-size:20px}
+  .dias button.hoy .d::before{display:none}
+  .dias button.hoy .num{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:3px}
+  .paso{width:38px;flex:none}
+  .pino-acc{margin-left:0;width:100%;display:grid;grid-template-columns:1fr 2fr}
+  .pino-acc .boton{text-align:center}
+  .servicios-in{padding:28px 10px 56px;gap:30px}
+  .agenda{padding:22px 16px 16px}
+  .l-dia{grid-template-columns:minmax(0,1fr);gap:12px}
+  .l-fecha{flex-direction:row;align-items:baseline;gap:10px}
+  .l-num{font-size:34px}
+  .l-dia.cerrado{display:flex;gap:14px;align-items:baseline}
+  .l-ocupa{margin-left:0}
+  .l-barra{flex:1;min-width:80px}
+  .fr{grid-template-columns:50px 12px minmax(0,1fr) auto;gap:0 10px;padding:11px 4px}
+  .fr-marca{width:12px;height:12px}
+  .fr-sello{display:none}
+  .fr-hora b{font-size:18px}
+  .fr-n{font-size:18px}
+  .fr-d{white-space:normal}
+  .lateral{display:flex;flex-direction:column;padding:0 6px}
+  .pend-lista{columns:1}
+  .dlg-hoja{padding:26px 20px 22px}
+  .nueva .campos{grid-template-columns:1fr 1fr}
+  .pie-in{flex-wrap:wrap}
+  .pie-boton{margin-left:0}
+}
+@media (max-width:420px){
+  .dias .pax{display:none}
+  .nueva .campos{grid-template-columns:1fr}
+}

@@ -1,0 +1,235 @@
+﻿/* Porta di Mare · la mesa puesta, vista desde arriba.
+   Camino de mesa azul marino de fondo, tablas de pino que cruzan, la carta impresa en papel blanco
+   con sus cintas negras, platos de mayólica fotografiados desde arriba. Todo plano. */
+:root{
+  --marino:#1c2340;          /* el camino de mesa */
+  --marino-2:#262f55;        /* un paño de mesa algo más claro */
+  --papel:#f8f8f5;           /* papel de la carta, blanco frío */
+  --tinta:#16182a;
+  --mayolica:#2a4a74;        /* el pincel azul de sus platos */
+  --terracota:#c4703f;       /* el canto del plato: precios y hoy */
+  --terracota-tinta:#a4521f; /* terracota para texto sobre papel */
+  --pino:#e3c597;
+  --pino-veta:#cfae7c;
+  --blanco:#ffffff;
+  --gris:#4a4f63;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px;scrollbar-color:var(--mayolica) var(--marino)}
+body{margin:0;background:var(--marino);color:var(--papel);font:400 18px/1.55 "Barlow",system-ui,sans-serif;caret-color:var(--terracota)}
+img{display:block;max-width:100%;height:auto}
+a{color:inherit;text-underline-offset:.2em}
+::selection{background:var(--terracota);color:var(--blanco)}
+:focus-visible{outline:3px solid var(--terracota);outline-offset:3px}
+h1,h2,h3,p,ul,ol,dl,dd,figure{margin:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* Su medallón y su nombre, en blanco o en la tinta que toque */
+.mascara{display:block;background:var(--m) center/contain no-repeat}
+.medallon-mask{--m:url(img/medallon.png);aspect-ratio:460/424}
+.nombre-mask{--m:url(img/nombre.png);aspect-ratio:1460/220}
+
+/* ——— Barra de arriba ——— */
+.barra{position:sticky;top:0;z-index:20;background:var(--marino);border-bottom:2px solid var(--mayolica)}
+.barra-in{display:flex;align-items:center;gap:26px;height:66px;max-width:1280px;margin:0 auto;padding:0 28px}
+.barra-marca{display:flex;align-items:center;gap:12px;color:var(--blanco);text-decoration:none}
+.barra-marca .medallon-mask{width:44px}
+.barra-marca .nombre-mask{width:150px}
+.barra-nav{display:flex;gap:24px;margin-left:auto;font:700 17px/1 "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.08em}
+.barra-nav a{text-decoration:none;padding:8px 0}
+.barra-nav a:hover{color:var(--terracota)}
+.idiomas{display:flex}
+.idiomas button{font:700 15px/1 "Barlow Condensed",sans-serif;letter-spacing:.1em;color:var(--papel);background:none;border:2px solid transparent;padding:8px 10px;cursor:pointer}
+.idiomas button[aria-pressed="true"]{color:var(--blanco);border-color:var(--pino);display:inline-flex;align-items:center;gap:6px}
+.idiomas button[aria-pressed="true"]::after{width:18px;height:18px;color:var(--pino)}
+.idiomas button:hover:not([aria-pressed="true"]){color:var(--terracota)}
+
+/* ——— La mesa ——— */
+.mesa{position:relative;overflow:hidden}
+.mesa-in{position:relative;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:56px;align-items:center;max-width:1280px;margin:0 auto;padding:64px 28px 76px}
+.casa{display:flex;flex-direction:column;gap:20px;color:var(--blanco);position:relative;z-index:2}
+.medallon-grande{width:150px}
+.nombre-grande{width:min(100%,520px)}
+.lema{font:700 20px/1 "Barlow Condensed",sans-serif;letter-spacing:.32em;text-transform:uppercase;color:var(--pino)}
+.linea{font-size:20px;line-height:1.5;max-width:36ch;color:var(--papel)}
+
+/* La hoja de la carta: papel blanco, cintas negras, puntos hasta el precio */
+.hoja{background:var(--papel);color:var(--tinta);padding:40px 44px}
+.hoja-mesa{position:relative;z-index:2;transform:rotate(-1.4deg);max-width:560px;justify-self:start}
+.cinta{display:inline-block;background:var(--tinta);color:var(--papel);font:800 26px/1 "Barlow Condensed",sans-serif;letter-spacing:.04em;text-transform:uppercase;padding:10px 30px 10px 16px;margin-bottom:18px;clip-path:polygon(0 0,100% 0,calc(100% - 14px) 50%,100% 100%,0 100%)}
+.platos{list-style:none;padding:0;display:flex;flex-direction:column;gap:12px}
+.plato-cab{display:flex;align-items:baseline;gap:8px}
+.plato-n{font:700 20px/1.1 "Barlow Condensed",sans-serif;letter-spacing:.02em}
+.puntos{flex:1;border-bottom:2px dotted var(--gris);transform:translateY(-4px);min-width:20px}
+.precio{font:700 19px/1 "Barlow Condensed",sans-serif;color:var(--terracota-tinta);font-variant-numeric:tabular-nums;white-space:nowrap}
+.plato-d{font-size:15px;line-height:1.35;color:var(--gris);margin-top:2px;max-width:46ch}
+.vegetal{display:inline-block;width:18px;height:18px;flex:none;background:var(--mayolica);-webkit-mask:var(--hoja) center/contain no-repeat;mask:var(--hoja) center/contain no-repeat;transform:translateY(3px);
+  --hoja:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10.5' fill='none' stroke='black' stroke-width='1.6'/%3E%3Cpath d='M12 18.5c-3.4-2-4.4-5.2-2.6-9.6 1-2.4 1.9-3.3 2.6-3.9.7.6 1.6 1.5 2.6 3.9 1.8 4.4.8 7.6-2.6 9.6zM12 18.5V9' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E")}
+.hoja-mas{display:inline-flex;align-items:center;gap:10px;margin-top:22px;font:800 18px/1 "Barlow Condensed",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--mayolica);text-decoration:none;border-bottom:2px solid var(--mayolica);padding-bottom:4px}
+.hoja-mas:hover{color:var(--terracota-tinta);border-color:var(--terracota-tinta)}
+.flecha{width:18px;height:12px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 12'%3E%3Cpath d='M0 6h16M11 1l5 5-5 5' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 12'%3E%3Cpath d='M0 6h16M11 1l5 5-5 5' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E") center/contain no-repeat}
+
+/* Un plato de mayólica en la mesa, cortado por el borde */
+.plato-mesa{position:absolute;right:-150px;top:30px;width:min(46vw,560px);z-index:1;pointer-events:none}
+.plato-mesa img{width:100%;aspect-ratio:1}
+
+/* La tabla de pino que cruza la mesa: la semana, el estado y la reserva */
+.tabla-pino{background:var(--pino);color:var(--tinta)}
+.tabla-in{display:flex;align-items:center;gap:30px;flex-wrap:wrap;max-width:1280px;margin:0 auto;padding:22px 28px}
+.etq{font:700 13px/1 "Barlow Condensed",sans-serif;letter-spacing:.2em;text-transform:uppercase;margin-bottom:8px}
+.semana{list-style:none;padding:0;display:flex}
+.semana li{font:700 16px/1 "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.06em;padding:9px 10px;border:2px solid var(--tinta);margin-right:-2px;background:var(--papel)}
+.semana li.cerrado{color:#6b6f7f;background:transparent;text-decoration:line-through;text-decoration-thickness:2px}
+.semana li.hoy{background:var(--terracota);color:var(--tinta);border-color:var(--tinta);display:flex;align-items:center;gap:6px}
+.semana li.hoy::before,.fila.hoy dt::after,.idiomas button[aria-pressed="true"]::after{content:"";display:inline-block;width:22px;height:22px;background:currentColor;-webkit-mask:url(img/medallon.png) center/contain no-repeat;mask:url(img/medallon.png) center/contain no-repeat}
+.estado{font:600 18px/1.3 "Barlow",sans-serif}
+.tabla-pino .estado.abierto{color:#1f5c38}
+.tabla-pino .boton{margin-left:auto}
+
+/* Botón: plano. Pulsar invierte. */
+.boton{display:inline-block;padding:15px 22px;border:2px solid var(--marino);background:var(--marino);color:var(--blanco);font:800 18px/1 "Barlow Condensed",sans-serif;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;cursor:pointer;white-space:nowrap;transition:background-color .15s,color .15s}
+.boton:hover,.boton:active{background:transparent;color:var(--marino)}
+.boton-claro{background:var(--papel);border-color:var(--papel);color:var(--marino)}
+.boton-claro:hover,.boton-claro:active{background:transparent;color:var(--papel)}
+.boton-hueco{background:transparent;border-color:var(--papel);color:var(--papel)}
+.boton-hueco:hover,.boton-hueco:active{background:var(--papel);color:var(--marino)}
+
+/* ——— La carta completa ——— */
+.seccion-carta{max-width:1280px;margin:0 auto;padding:80px 28px}
+.hoja-grande{position:relative;padding:98px 60px 56px;transform:rotate(-.6deg)}
+.hoja-grande::before{content:"";position:absolute;left:0;right:0;top:0;height:42px;background:url(img/cenefa.png) left center/auto 42px repeat-x}
+.hoja-titulo{font:800 clamp(44px,5vw,70px)/.95 "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.01em;color:var(--mayolica);margin-bottom:34px;border-bottom:3px solid var(--tinta);padding-bottom:16px}
+.hoja-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px 64px}
+.hoja-cols>div>.cinta+.platos{margin-bottom:32px}
+.recuadro{border:2px solid var(--tinta);padding:22px 24px;margin:6px 0 24px;position:relative}
+
+.recuadro-t{font:800 28px/1 "Barlow Condensed",sans-serif;text-transform:uppercase;margin-bottom:14px}
+.platos-supl .plato-n{font:600 17px/1.2 "Barlow",sans-serif}
+.platos-supl{gap:8px}
+.hoja-nota{font-size:15px;color:var(--gris);margin-top:8px;display:flex;gap:8px;align-items:flex-start}
+.alerg{border-top:1px solid #c9ccd6;padding-top:10px;margin-top:14px}
+
+/* ——— Dal forno ——— */
+.forno{background:var(--marino-2);border-block:2px solid var(--mayolica)}
+.forno-in{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:40px 56px;max-width:1280px;margin:0 auto;padding:80px 28px;align-items:center}
+.foto{position:relative;background:var(--papel);padding:3px}
+.foto img{width:100%;aspect-ratio:1;object-fit:cover}
+.pie-foto{display:block;background:var(--tinta);color:var(--papel);font:700 16px/1.15 "Barlow Condensed",sans-serif;letter-spacing:.04em;text-transform:uppercase;padding:10px 10px}
+
+.titulo{font:800 clamp(42px,4.4vw,64px)/.95 "Barlow Condensed",sans-serif;text-transform:uppercase;color:var(--blanco)}
+.forno-texto{display:flex;flex-direction:column;gap:14px}
+.forno-texto p:first-of-type{font-size:clamp(22px,2.2vw,30px)!important;line-height:1.3;max-width:28ch!important}
+.forno-texto p{font-size:20px;max-width:40ch}
+.nota{font-size:15px!important;color:#c7cbe0}
+.platos-foto{grid-column:1 / -1;list-style:none;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px}
+
+/* ——— Terrazza ——— */
+.terr-in{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,5fr) minmax(0,3fr);gap:48px;align-items:center;max-width:1280px;margin:0 auto;padding:90px 28px}
+
+.foto-rotulo img{aspect-ratio:2/3}
+.foto-mesa{align-self:end}
+.foto-mesa img{aspect-ratio:9/16}
+.terr-texto{display:flex;flex-direction:column;gap:14px}
+.terr-texto p{font-size:19px;max-width:42ch}
+.sub{font:800 22px/1.1 "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--pino);margin-top:16px}
+.opiniones{border-top:2px solid var(--mayolica);margin-top:14px;padding-top:4px}
+.opiniones ul{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:8px}
+.opiniones li{font-size:18px;padding-left:20px;position:relative}
+.opiniones li::before{content:"";position:absolute;left:0;top:.62em;width:9px;height:9px;background:var(--terracota)}
+
+/* ——— Reserva ——— */
+.reserva{background:var(--marino-2);border-top:2px solid var(--mayolica)}
+.reserva-in{display:grid;grid-template-columns:minmax(0,6fr) minmax(0,5fr);gap:40px 56px;max-width:1280px;margin:0 auto;padding:80px 28px 90px;align-items:stretch}
+.reserva-in>.mapa{grid-column:1 / -1;margin-top:0;aspect-ratio:auto;height:320px;border:3px solid var(--papel)}
+.hoja-form{display:flex;flex-direction:column;gap:18px}
+.hoja-form .hoja-titulo{margin-bottom:0}
+.campos{display:grid;grid-template-columns:1fr 1fr;gap:18px 24px}
+.campo{display:flex;flex-direction:column;gap:4px}
+.campo.ancho{grid-column:1 / -1}
+.campo>span{font:700 14px/1.2 "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--mayolica)}
+.campo input,.campo select,.campo textarea{font:400 18px/1.35 "Barlow",sans-serif;color:var(--tinta);background:transparent;border:0;border-bottom:2px solid var(--tinta);border-radius:0;padding:8px 2px;min-height:46px;width:100%}
+.campo select{appearance:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2316182a' stroke-width='2'/%3E%3C/svg%3E") right 4px center no-repeat}
+.campo input::-webkit-calendar-picker-indicator{cursor:pointer;filter:invert(24%) sepia(40%) saturate(900%) hue-rotate(190deg) brightness(85%)}
+.campo input::-webkit-datetime-edit{color:var(--tinta)}
+.campo input:not(:focus):invalid::-webkit-datetime-edit{color:#5d6274}
+form{accent-color:var(--mayolica)}
+.campo input:focus,.campo select:focus,.campo textarea:focus{outline:none;background-color:rgba(42,74,116,.08)}
+.campo input:focus-visible,.campo select:focus-visible,.campo textarea:focus-visible{outline:2px solid var(--mayolica);outline-offset:2px}
+.campo input:user-invalid,.campo select:user-invalid{border-bottom-style:dashed;border-bottom-color:var(--terracota-tinta)}
+.boton-marino{align-self:flex-start}
+.info .titulo{font-size:40px}
+.tabla{margin-top:14px}
+.fila{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid rgba(248,248,245,.3);font-variant-numeric:tabular-nums}
+.fila dt{font:700 18px/1.2 "Barlow Condensed",sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.fila.cerrada{color:#b9bed4}
+.fila.hoy{color:var(--pino)}
+.fila.hoy dt::after{margin-left:10px;vertical-align:-.3em;color:var(--pino)}
+.info .estado{margin-top:14px}
+.info .estado.abierto{color:var(--pino)}
+.info-donde{margin-top:34px}
+.direccion{margin-top:10px;font-size:20px}
+.acciones{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+.mapa{display:block;width:100%;aspect-ratio:16/10;border:0;margin-top:10px;border:3px solid var(--tinta)}
+.cenefa{height:42px;background:url(img/cenefa.png) left center/auto 42px repeat-x}
+
+/* ——— Pie ——— */
+.pie{border-top:2px solid var(--mayolica)}
+.pie-in{display:flex;gap:22px;align-items:center;max-width:1280px;margin:0 auto;padding:36px 28px 44px;color:#c7cbe0}
+.pie-medallon{width:70px;flex:none;color:var(--blanco)}
+.pie-nota{font-size:14px;margin-top:6px;max-width:80ch}
+.barra-movil{display:none}
+
+/* Visor con los colores de la mesa */
+.visor::backdrop{background:rgba(28,35,64,.95)}
+.visor img{border-radius:0;border:8px solid var(--papel)}
+.visor figcaption{color:var(--papel);font:700 18px/1.2 "Barlow Condensed",sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.visor button{border-radius:0;background:var(--papel);color:var(--marino);display:grid;place-items:center}
+.visor button:hover{background:var(--pino)}
+.resumen-pedido{border:2px solid var(--tinta)!important;border-radius:0!important}
+
+/* El gesto: al cambiar de idioma, la carta se vuelve a imprimir línea a línea */
+.imprime .platos li{animation:imprime .6s cubic-bezier(.16,1,.3,1) both;animation-delay:calc(var(--i,0) * 45ms)}
+@keyframes imprime{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+
+@media (max-width:1060px){
+  .barra-nav{display:none}
+  .idiomas{margin-left:auto}
+  .mesa-in{grid-template-columns:1fr;gap:40px;padding:44px 22px 56px}
+  .plato-mesa{width:340px;right:-120px;top:20px}
+  .hoja-mesa{max-width:none;width:100%}
+  .forno-in,.reserva-in{grid-template-columns:1fr}
+  .platos-foto{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .terr-in{grid-template-columns:1fr 1fr}
+  .terr-texto{grid-column:1 / -1;grid-row:1}
+}
+@media (max-width:640px){
+  body{padding-bottom:62px}
+  .barra-in{gap:12px;height:60px;padding:0 16px}
+  .barra-marca .nombre-mask{width:118px}
+  .barra-marca .medallon-mask{width:36px}
+  .medallon-grande{width:104px}
+  .hoja-mesa{display:none}
+  .plato-mesa{display:none}
+  .hoja-grande{transform:none}
+  .lema{font-size:16px;letter-spacing:.2em}
+  .mesa-in{padding:40px 22px 44px}
+  .hoja{padding:28px 22px}
+  .hoja-mesa{transform:none}
+  .tabla-in{padding:18px 16px;gap:16px}
+  .semana li{padding:8px 7px;font-size:15px}
+  .tabla-pino .boton{margin-left:0;width:100%;text-align:center}
+  .seccion-carta{padding:48px 12px}
+  .hoja-grande{padding:30px 20px}
+  .hoja-cols{grid-template-columns:1fr}
+  .forno-in,.terr-in,.reserva-in{padding:56px 16px}
+  .platos-foto{gap:12px}
+  .terr-in{grid-template-columns:1fr}
+  .foto-mesa img{aspect-ratio:4/5}
+  .campos{grid-template-columns:1fr}
+  .pie-in{padding:30px 16px 36px}
+  .barra-movil{display:grid;grid-template-columns:1fr 1fr;position:fixed;left:0;right:0;bottom:0;z-index:30;border-top:2px solid var(--mayolica)}
+  .barra-movil a{display:block;padding:18px 10px;text-align:center;text-decoration:none;font:800 18px/1 "Barlow Condensed",sans-serif;letter-spacing:.08em;text-transform:uppercase;background:var(--papel);color:var(--marino)}
+  .barra-movil a.wa{background:var(--pino);color:var(--tinta)}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.imprime .platos li{animation:none}}
