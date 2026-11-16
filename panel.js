@@ -55,7 +55,7 @@
   var lista = [], ajustes = { aforo: 60 };
   var CFG = window.PDM_SUPABASE || {};
   var sb = CFG.url && CFG.anonKey && window.supabase ? window.supabase.createClient(CFG.url, CFG.anonKey) : null;
-  var CAMPOS = 'id,n,p,d,s,h,x,mesa,tel,origen,estado,creada,cambiada';
+  var CAMPOS = 'id,codigo,n,p,d,s,h,x,mesa,tel,origen,estado,creada,cambiada';
   /* Convierte la respuesta de Supabase en datos, o en un error: http 401 = sin sesión,
      otro número = la base de datos lo ha rechazado, sin número = no hay conexión */
   function q(promesa) {
@@ -277,6 +277,7 @@
     dato(dl, 'Teléfono', r.tel);
     dato(dl, 'Notas', r.x);
     dato(dl, 'Vía', r.origen);
+    dato(dl, 'Código', r.codigo);
     var acc = $('[data-ficha-acc]'); acc.textContent = '';
     acc.appendChild(el('span', 'sello est-' + r.estado, ESTADO[r.estado] || r.estado));
     (ACC[r.estado] || []).forEach(function (a) {

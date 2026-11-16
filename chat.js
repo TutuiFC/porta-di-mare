@@ -12,26 +12,26 @@
   var T = {
     es: { lanza: 'Reservar con el asistente', titulo: 'Asistente', sub: 'Reservas · Porta di Mare', cerrar: 'Cerrar el asistente',
       hola: '¡Hola! Soy el asistente de Porta di Mare. Te ayudo a pedir mesa o a resolver dudas sobre la carta y el horario. ¿Para qué día y cuántas personas?',
-      atajos: ['Quiero reservar mesa', '¿Qué horario tenéis?', '¿Hay masa sin gluten?'], ph: 'Escribe tu mensaje…', enviar: 'Enviar',
+      atajos: ['Quiero reservar mesa', '¿Qué horario tenéis?', '¿Hay masa sin gluten?', 'Consultar o cambiar mi reserva'], ph: 'Escribe tu mensaje…', enviar: 'Enviar',
       nota: 'Asistente con IA: puede equivocarse. La mesa queda confirmada cuando te escribimos o llamamos.',
       error: 'Ahora mismo no puedo responder. Llámanos al 633 45 06 54 o escríbenos por WhatsApp.', ticket: 'Petición enviada',
-      tticket: 'Te confirmamos la mesa por teléfono o WhatsApp.', pax: 'personas', alt: 'O resérvalo hablando con el asistente',
+      tticket: 'Te confirmamos la mesa por teléfono o WhatsApp.', pax: 'personas', cod: 'Código de reserva', tcod: 'Guárdalo: con él puedes consultar, cambiar o anular tu reserva aquí.', alt: 'O resérvalo hablando con el asistente',
       apagado: ['Actualmente no funciono. Si necesitas más información, llama al ', '.'], wa: 'Hola Porta di Mare, quiero reservar:',
       dias: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] },
     ca: { lanza: 'Reservar amb l’assistent', titulo: 'Assistent', sub: 'Reserves · Porta di Mare', cerrar: 'Tancar l’assistent',
       hola: 'Hola! Sóc l’assistent de Porta di Mare. T’ajudo a demanar taula o amb dubtes sobre la carta i l’horari. Per a quin dia i quantes persones?',
-      atajos: ['Vull reservar taula', 'Quin horari teniu?', 'Hi ha massa sense gluten?'], ph: 'Escriu el teu missatge…', enviar: 'Enviar',
+      atajos: ['Vull reservar taula', 'Quin horari teniu?', 'Hi ha massa sense gluten?', 'Consultar o canviar la meva reserva'], ph: 'Escriu el teu missatge…', enviar: 'Enviar',
       nota: 'Assistent amb IA: es pot equivocar. La taula queda confirmada quan t’escrivim o et truquem.',
       error: 'Ara mateix no puc respondre. Truca’ns al 633 45 06 54 o escriu-nos per WhatsApp.', ticket: 'Petició enviada',
-      tticket: 'Et confirmem la taula per telèfon o WhatsApp.', pax: 'persones', alt: 'O reserva parlant amb l’assistent',
+      tticket: 'Et confirmem la taula per telèfon o WhatsApp.', pax: 'persones', cod: 'Codi de reserva', tcod: 'Guarda’l: amb ell pots consultar, canviar o anul·lar la teva reserva aquí.', alt: 'O reserva parlant amb l’assistent',
       apagado: ['Ara mateix no funciono. Si necessites més informació, truca al ', '.'], wa: 'Hola Porta di Mare, vull reservar:',
       dias: ['diumenge', 'dilluns', 'dimarts', 'dimecres', 'dijous', 'divendres', 'dissabte'] },
     en: { lanza: 'Book with the assistant', titulo: 'Assistant', sub: 'Bookings · Porta di Mare', cerrar: 'Close the assistant',
       hola: 'Hi! I’m the Porta di Mare assistant. I can help you request a table or answer questions about the menu and opening hours. Which day, and how many people?',
-      atajos: ['I’d like to book a table', 'What are your hours?', 'Do you have gluten-free dough?'], ph: 'Type your message…', enviar: 'Send',
+      atajos: ['I’d like to book a table', 'What are your hours?', 'Do you have gluten-free dough?', 'Check or change my booking'], ph: 'Type your message…', enviar: 'Send',
       nota: 'AI assistant: it can make mistakes. Your table is confirmed once we message or call you.',
       error: 'I can’t reply right now. Call us on +34 633 45 06 54 or message us on WhatsApp.', ticket: 'Request sent',
-      tticket: 'We’ll confirm your table by phone or WhatsApp.', pax: 'people', alt: 'Or book by chatting with the assistant',
+      tticket: 'We’ll confirm your table by phone or WhatsApp.', pax: 'people', cod: 'Booking code', tcod: 'Keep it: use it here to check, change or cancel your booking.', alt: 'Or book by chatting with the assistant',
       apagado: ['I’m not working at the moment. For more information, call ', '.'], wa: 'Hi Porta di Mare, I would like to book:',
       dias: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] }
   };
@@ -93,6 +93,13 @@
     c.appendChild(el('b', null, x.ticket));
     c.appendChild(el('p', null, x.dias[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + ' · ' + r.hora + ' · ' + r.personas + ' ' + x.pax + ' · ' + r.nombre));
     c.appendChild(el('span', null, x.tticket));
+    if (r.codigo) {
+      var k = el('div', 'chat-codigo');
+      k.appendChild(el('small', null, x.cod));
+      k.appendChild(el('strong', null, r.codigo));
+      k.appendChild(el('span', null, x.tcod));
+      c.appendChild(k);
+    }
     return c;
   }
   function burbuja(m) {

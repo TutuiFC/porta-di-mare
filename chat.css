@@ -61,3 +61,6 @@
   .chat{right:0;bottom:0;width:100vw;height:100dvh;border:0;box-shadow:none;z-index:60}
 }
 @media (prefers-reduced-motion:reduce){.chat-escribe i{animation:none;opacity:.6}.chat-lanza{transition:none}}
+.chat-codigo{margin-top:10px;padding-top:10px;border-top:2px dashed var(--tinta)}
+.chat-codigo small{display:block;font:700 13px/1 "Barlow Condensed",sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--gris)}
+.chat-codigo strong{display:block;font:800 30px/1.1 "Barlow Condensed",sans-serif;letter-spacing:.18em;margin:4px 0 2px;user-select:all}

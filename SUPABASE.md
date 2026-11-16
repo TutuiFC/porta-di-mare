@@ -65,6 +65,8 @@ El mismo asistente atiende por Telegram, como si fuera el WhatsApp del restauran
 
 Las reservas del bot entran como «Por confirmar» y «Vía Telegram».
 
+**Código de reserva.** Ejecuta también `supabase/codigos.sql`. Cada reserva recibe un código de 6 caracteres (p. ej. `K7Q2XM`): el asistente se lo da al cliente al reservar (en Telegram, en un mensaje aparte; en la web, en la tarjeta de la reserva) y con él el cliente puede consultar el estado, cambiar día, hora, personas o notas, o anular. Los cambios vuelven a dejar la reserva «por confirmar» y avisan al restaurante por Telegram. Consultar, cambiar y anular solo las puede hacer la función del servidor, no la web. El código se ve en la ficha del panel.
+
 **Notas de voz.** El bot entiende audios: Gemini los transcribe y la conversación sigue igual. Si el cliente habla por voz, el bot contesta con una nota de voz (con el texto debajo), generada con el modelo de voz de Gemini (`GEMINI_TTS_MODEL`, por defecto `gemini-3.8-flash-lite-tts`; voz `GEMINI_VOZ`, por defecto `Kore`). Si la voz falla o se acaba la cuota, contesta por escrito. Si Gemini está caído, pide que se lo escriban (DeepSeek no entiende audio).
 
 ## 5. Publicar en GitHub Pages

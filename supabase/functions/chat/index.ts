@@ -69,6 +69,13 @@ Cómo reservar:
 4. Antes de guardar, resume la reserva en una línea (día con el nombre del día, hora, personas, nombre, teléfono, notas) y pide confirmación explícita. Solo cuando el cliente confirme, llama a crear_reserva, una sola vez.
 5. Después explica que es una petición: el restaurante la confirmará por teléfono o WhatsApp. Nunca digas que la mesa ya está confirmada ni prometas una mesa o zona concreta.
 6. Si crear_reserva devuelve un error, explica el motivo con tus palabras y ayuda a corregirlo.
+7. Cuando se guarda, crear_reserva devuelve un código de 6 caracteres: díselo al cliente y explícale que con ese código puede consultar, cambiar o anular su reserva escribiendo aquí.
+
+Consultar, cambiar o anular una reserva:
+- Pide siempre el código de reserva; sin código no puedes buscarla (si no lo tiene, que llame al 633 45 06 54). Nunca inventes ni adivines códigos.
+- Con el código, llama a consultar_reserva y cuéntale los datos y el estado con tus palabras.
+- Para cambiarla (día, hora, personas o notas) o anularla: resume lo que vas a hacer y pide confirmación explícita; solo entonces llama a modificar_reserva o anular_reserva.
+- Al cambiarla, explica que vuelve a quedar pendiente: el restaurante la confirmará de nuevo. Las reservas ya pasadas, anuladas o atendidas no se pueden cambiar.
 
 Estilo: responde en el idioma del cliente (castellano, catalán o inglés). Mensajes cortos, cálidos y claros, sin listas largas ni markdown. No inventes platos, precios ni servicios que no estén aquí. Si te preguntan algo que no sabes, da el teléfono. Si la conversación no tiene que ver con el restaurante, reconduce con amabilidad.`;
 
@@ -103,15 +110,35 @@ async function pedirReserva(r: { nombre: string; personas: number; dia: string; 
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ p_n: r.nombre, p_p: r.personas, p_d: r.dia, p_s: r.servicio, p_h: r.hora, p_x: r.notas || "", p_tel: r.telefono, p_origen: origen }),
   });
-  if (res.ok) return { ok: true as const };
-  const err = await res.json().catch(() => ({}));
-  return { ok: false as const, error: String(err.message || "No se ha podido guardar la reserva") };
+  const j = await res.json().catch(() => ({}));
+  if (res.ok) return { ok: true as const, codigo: String(j?.codigo || "") };
+  return { ok: false as const, error: String(j?.message || "No se ha podido guardar la reserva") };
 }
 
-/* ——— La herramienta, igual para las dos IA ——— */
-const HERRAMIENTA = {
+/* Consultar, cambiar y anular por código: solo con la clave de servidor (la web no puede llamarlas) */
+async function rpcServidor(nombre: string, args: Record<string, unknown>) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${nombre}`, {
+    method: "POST",
+    signal: AbortSignal.timeout(15000),
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  const j = await res.json().catch(() => null);
+  if (res.ok) return { ok: true as const, datos: j as Record<string, unknown> | null };
+  return { ok: false as const, error: String(j?.message || "No se ha podido completar") };
+}
+
+/* ——— Las herramientas, iguales para las dos IA ——— */
+type Herramienta = {
+  nombre: string;
+  descripcion: string;
+  parametros: Record<string, { type: string; description: string; enum?: string[] }>;
+  obligatorios: string[];
+};
+const CODIGO = { type: "string", description: "Código de reserva de 6 caracteres que tiene el cliente (p. ej. K7Q2XM)" };
+const HERRAMIENTAS: Herramienta[] = [{
   nombre: "crear_reserva",
-  descripcion: "Guarda la petición de reserva en el libro del restaurante como pendiente de confirmar. Úsala una sola vez y solo después de que el cliente haya confirmado explícitamente el resumen.",
+  descripcion: "Guarda la petición de reserva en el libro del restaurante como pendiente de confirmar y devuelve su código. Úsala una sola vez y solo después de que el cliente haya confirmado explícitamente el resumen.",
   parametros: {
     nombre: { type: "string", description: "Nombre de quien reserva" },
     personas: { type: "integer", description: "Número de personas, de 1 a 80" },
@@ -120,25 +147,76 @@ const HERRAMIENTA = {
     hora: { type: "string", description: "Hora de llegada en formato HH:MM, 24 h" },
     telefono: { type: "string", description: "Teléfono de contacto" },
     notas: { type: "string", description: "Celebración, alergias, terraza, trona… Cadena vacía si no hay" },
-  } as Record<string, { type: string; description: string; enum?: string[] }>,
+  },
   obligatorios: ["nombre", "personas", "dia", "servicio", "hora", "telefono", "notas"],
-};
+}, {
+  nombre: "consultar_reserva",
+  descripcion: "Busca una reserva por su código y devuelve sus datos y su estado (pendiente, confirmada, llegada, novino o anulada).",
+  parametros: { codigo: CODIGO },
+  obligatorios: ["codigo"],
+}, {
+  nombre: "modificar_reserva",
+  descripcion: "Cambia el día, la hora, las personas o las notas de una reserva existente. Pasa solo lo que cambia. Úsala solo después de consultarla y de que el cliente confirme el cambio. La reserva vuelve a quedar pendiente de confirmar por el restaurante.",
+  parametros: {
+    codigo: CODIGO,
+    dia: { type: "string", description: "Nuevo día, AAAA-MM-DD" },
+    hora: { type: "string", description: "Nueva hora, HH:MM, 24 h" },
+    personas: { type: "integer", description: "Nuevo número de personas" },
+    notas: { type: "string", description: "Notas nuevas completas (sustituyen a las anteriores)" },
+  },
+  obligatorios: ["codigo"],
+}, {
+  nombre: "anular_reserva",
+  descripcion: "Anula una reserva por su código. Úsala solo después de consultarla y de que el cliente confirme que quiere anularla.",
+  parametros: { codigo: CODIGO },
+  obligatorios: ["codigo"],
+}];
 
 type Texto = { role: "user" | "assistant"; content: string };
 type Estado = { reserva: Record<string, unknown> | null; origen: string };
+const ESTADOS: Record<string, string> = {
+  pendiente: "pendiente de confirmar por el restaurante", confirmada: "confirmada por el restaurante",
+  llegada: "ya ha pasado (el cliente vino)", novino: "ya ha pasado (no se presentó)", anulada: "anulada",
+};
 
-/* Ejecuta crear_reserva. Si ya se guardó una en esta conversación (con cualquiera de las dos IA), no guarda otra. */
+/* Ejecuta una herramienta. Solo se crea una reserva por conversación (con cualquiera de las dos IA). */
 async function ejecutar(nombre: string, args: Record<string, unknown>, estado: Estado): Promise<string> {
-  if (nombre !== HERRAMIENTA.nombre) return "ERROR: herramienta desconocida.";
-  if (estado.reserva) return "Ya se ha guardado una reserva en esta conversación. No guardes otra.";
-  const datos = {
-    nombre: String(args.nombre ?? ""), personas: Math.round(Number(args.personas)), dia: String(args.dia ?? ""),
-    servicio: String(args.servicio ?? ""), hora: String(args.hora ?? ""), telefono: String(args.telefono ?? ""), notas: String(args.notas ?? ""),
-  };
-  const g = await pedirReserva(datos, estado.origen);
-  if (!g.ok) return `ERROR: ${g.error}. La reserva NO se ha guardado.`;
-  estado.reserva = { nombre: datos.nombre, personas: datos.personas, dia: datos.dia, servicio: datos.servicio, hora: datos.hora };
-  return "Petición guardada como pendiente. El restaurante la confirmará por teléfono o WhatsApp.";
+  if (nombre === "crear_reserva") {
+    if (estado.reserva) return `Ya se ha guardado una reserva en esta conversación (código ${estado.reserva.codigo}). No guardes otra.`;
+    const datos = {
+      nombre: String(args.nombre ?? ""), personas: Math.round(Number(args.personas)), dia: String(args.dia ?? ""),
+      servicio: String(args.servicio ?? ""), hora: String(args.hora ?? ""), telefono: String(args.telefono ?? ""), notas: String(args.notas ?? ""),
+    };
+    const g = await pedirReserva(datos, estado.origen);
+    if (!g.ok) return `ERROR: ${g.error}. La reserva NO se ha guardado.`;
+    estado.reserva = { nombre: datos.nombre, personas: datos.personas, dia: datos.dia, servicio: datos.servicio, hora: datos.hora, codigo: g.codigo };
+    return `Petición guardada como pendiente. Código de reserva: ${g.codigo}. Dale el código al cliente: con él podrá consultar, cambiar o anular la reserva aquí mismo. El restaurante la confirmará por teléfono o WhatsApp.`;
+  }
+  const codigo = String(args.codigo ?? "");
+  if (nombre === "consultar_reserva") {
+    const g = await rpcServidor("consultar_reserva", { p_codigo: codigo });
+    if (!g.ok) return `ERROR: ${g.error}`;
+    if (!g.datos) return "No hay ninguna reserva con ese código. Pide al cliente que lo revise.";
+    const r = g.datos;
+    return `Reserva ${r.codigo}: ${r.nombre}, ${r.personas} personas, ${r.dia} (${DIAS[new Date(r.dia + "T12:00:00Z").getUTCDay()]}), ${r.servicio} a las ${r.hora}` +
+      `${r.notas ? `, notas: ${r.notas}` : ""}. Estado: ${ESTADOS[String(r.estado)] || r.estado}.`;
+  }
+  if (nombre === "modificar_reserva") {
+    const g = await rpcServidor("modificar_reserva", {
+      p_codigo: codigo, p_d: args.dia || null, p_h: args.hora || null,
+      p_p: args.personas == null ? null : Math.round(Number(args.personas)), p_x: args.notas == null ? null : String(args.notas),
+    });
+    if (!g.ok) return `ERROR: ${g.error}. La reserva NO se ha cambiado.`;
+    await avisarCambio(g.datos!, "cambiada").catch((e) => console.error("Aviso de cambio:", e));
+    return `Reserva cambiada: ${g.datos!.personas} personas, ${g.datos!.dia}, ${g.datos!.servicio} a las ${g.datos!.hora}. Vuelve a estar pendiente: el restaurante la confirmará de nuevo por teléfono o WhatsApp.`;
+  }
+  if (nombre === "anular_reserva") {
+    const g = await rpcServidor("anular_reserva", { p_codigo: codigo });
+    if (!g.ok) return `ERROR: ${g.error}. La reserva NO se ha anulado.`;
+    await avisarCambio(g.datos!, "anulada").catch((e) => console.error("Aviso de anulación:", e));
+    return "Reserva anulada. El restaurante ya está avisado.";
+  }
+  return "ERROR: herramienta desconocida.";
 }
 
 /* Error de una IA que justifica pasar a la otra: saturada, caída o lenta */
@@ -157,16 +235,16 @@ type Parte = { text?: string; functionCall?: { name: string; args?: Record<strin
 type Contenido = { role: "user" | "model"; parts: Parte[] };
 
 const GEMINI_TOOLS = [{
-  functionDeclarations: [{
-    name: HERRAMIENTA.nombre,
-    description: HERRAMIENTA.descripcion,
+  functionDeclarations: HERRAMIENTAS.map((h) => ({
+    name: h.nombre,
+    description: h.descripcion,
     parameters: {
       type: "OBJECT",
-      properties: Object.fromEntries(Object.entries(HERRAMIENTA.parametros).map(([k, v]) =>
+      properties: Object.fromEntries(Object.entries(h.parametros).map(([k, v]) =>
         [k, { type: v.type.toUpperCase(), description: v.description, ...(v.enum ? { format: "enum", enum: v.enum } : {}) }])),
-      required: HERRAMIENTA.obligatorios,
+      required: h.obligatorios,
     },
-  }],
+  })),
 }];
 
 async function llamarGemini(contenidos: Contenido[], sistema: string) {
@@ -206,14 +284,14 @@ async function conGemini(textos: Texto[], sistema: string, estado: Estado): Prom
 /* ——— DeepSeek (API compatible con OpenAI) ——— */
 type MensajeDS = { role: string; content: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[]; tool_call_id?: string; [k: string]: unknown };
 
-const DEEPSEEK_TOOLS = [{
+const DEEPSEEK_TOOLS = HERRAMIENTAS.map((h) => ({
   type: "function",
   function: {
-    name: HERRAMIENTA.nombre,
-    description: HERRAMIENTA.descripcion,
-    parameters: { type: "object", properties: HERRAMIENTA.parametros, required: HERRAMIENTA.obligatorios, additionalProperties: false },
+    name: h.nombre,
+    description: h.descripcion,
+    parameters: { type: "object", properties: h.parametros, required: h.obligatorios, additionalProperties: false },
   },
-}];
+}));
 
 async function llamarDeepSeek(mensajes: MensajeDS[]) {
   const t0 = Date.now();
@@ -247,7 +325,7 @@ async function conDeepSeek(textos: Texto[], sistema: string, estado: Estado): Pr
 
 /* ——— Responder: Gemini primero; si está saturado, caído o lento, DeepSeek ——— */
 async function responder(textos: Texto[], sistema: string, estado: Estado): Promise<{ texto: string; motor: string }> {
-  const listo = () => (estado.reserva ? "¡Listo! Hemos recibido tu petición. Te confirmaremos la mesa por teléfono o WhatsApp." : "");
+  const listo = () => (estado.reserva ? `¡Listo! Hemos recibido tu petición. Tu código de reserva es ${estado.reserva.codigo}. Te confirmaremos la mesa por teléfono o WhatsApp.` : "");
   try {
     if (!GEMINI_API_KEY) throw new ErrorIA(503, "Sin clave de Gemini");
     return { texto: (await conGemini(textos, sistema, estado)) || listo(), motor: "gemini" };
@@ -481,13 +559,42 @@ async function atenderTelegram(update: { message?: MensajeTG }) {
     { chat_id: chat, role: "user", content: texto },
     { chat_id: chat, role: "assistant", content: respuesta },
   ]) });
-  if (porVoz && (await responderConVoz(chat, respuesta))) return;
-  await responde(respuesta);
+  if (!(porVoz && (await responderConVoz(chat, respuesta)))) await responde(respuesta);
+
+  /* Al reservar, un mensaje aparte con el código, fácil de encontrar y de reenviar */
+  const codigo = estado.reserva?.codigo;
+  if (codigo) {
+    const r = estado.reserva!;
+    const d = new Date(String(r.dia) + "T12:00:00Z");
+    const ficha = `${DIAS_CORTOS[d.getUTCDay()]} ${d.getUTCDate()}/${d.getUTCMonth() + 1} · ${r.hora} · ${r.personas} pax · ${r.nombre}`;
+    const textoCodigo: Record<string, string> = {
+      es: `🎟️ Código de reserva: ${codigo}\n${ficha}\nEstado: pendiente de confirmar.\n\nGuárdalo: escribiéndome este código puedes consultar, cambiar o anular tu reserva.`,
+      ca: `🎟️ Codi de reserva: ${codigo}\n${ficha}\nEstat: pendent de confirmar.\n\nGuarda'l: escrivint-me aquest codi pots consultar, canviar o anul·lar la teva reserva.`,
+      en: `🎟️ Booking code: ${codigo}\n${ficha}\nStatus: waiting for confirmation.\n\nKeep it: send me this code to check, change or cancel your booking.`,
+    };
+    await responde(textoCodigo[idioma] || textoCodigo.es);
+  }
 }
 
 /* Aviso al restaurante de una petición nueva. Lo llama la base de datos al guardar una reserva «pendiente».
    Cada reserva se avisa una sola vez y solo en sus primeros 10 minutos: llamarlo de más no sirve para nada. */
 const DIAS_CORTOS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+async function chatDeAvisos() {
+  const aj = (await bd("ajustes?select=telegram_aviso_chat&id=eq.1")) as { telegram_aviso_chat: number | null }[];
+  return aj?.[0]?.telegram_aviso_chat || null;
+}
+async function avisarCambio(r: Record<string, unknown>, tipo: "cambiada" | "anulada") {
+  if (!TG_TOKEN || !SERVICE_KEY) return;
+  const chat = await chatDeAvisos();
+  if (!chat) return;
+  const lineas = tipo === "anulada"
+    ? [`❌ Reserva ${r.codigo} anulada por el cliente`]
+    : [`✏️ Reserva ${r.codigo} cambiada por el cliente (vuelve a estar por confirmar)`,
+       `${DIAS_CORTOS[new Date(String(r.dia) + "T12:00:00Z").getUTCDay()]} ${Number(String(r.dia).slice(8, 10))}/${Number(String(r.dia).slice(5, 7))} · ${r.servicio} ${r.hora} · ${r.personas} pax`,
+       `${r.nombre}`, r.notas ? `Notas: ${r.notas}` : ""];
+  lineas.push(`Panel: ${PANEL}`);
+  await tg("sendMessage", { chat_id: chat, text: lineas.filter(Boolean).join("\n"), link_preview_options: { is_disabled: true } });
+}
 async function avisar(id: string) {
   if (!TG_TOKEN || !/^[0-9a-f-]{36}$/i.test(id)) return "nada";
   const desde = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -500,7 +607,7 @@ async function avisar(id: string) {
   if (!chat) return "sin chat de avisos";
   const d = new Date(String(r.d) + "T12:00:00Z");
   const lineas = [
-    `🔔 Nueva petición · vía ${r.origen}`,
+    `🔔 Nueva petición ${r.codigo} · vía ${r.origen}`,
     `${DIAS_CORTOS[d.getUTCDay()]} ${d.getUTCDate()}/${d.getUTCMonth() + 1} · ${r.s} ${r.h} · ${r.p} pax`,
     `${r.n}${r.tel ? " · " + r.tel : ""}`,
     r.x ? `Notas: ${r.x}` : "",
