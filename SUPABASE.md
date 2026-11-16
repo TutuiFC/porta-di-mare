@@ -48,7 +48,7 @@ supabase functions deploy chat --no-verify-jwt
 
 - `GEMINI_API_KEY`: la clave de Google AI Studio (<https://aistudio.google.com> → Get API key). Es gratuita y no pide tarjeta. Se guarda en Supabase, nunca en la web ni en GitHub.
 - `ALLOWED_ORIGIN`: el dominio de tu GitHub Pages (sin barra final). Así otras webs no pueden usar tu asistente ni gastar tu clave.
-- Modelo: por defecto `gemini-flash-latest` (el Flash gratuito más reciente). Para fijar otro: `supabase secrets set GEMINI_MODEL=nombre-del-modelo`.
+- Modelo: por defecto `gemini-3.5-flash-lite`. Para fijar otro: `supabase secrets set GEMINI_MODEL=nombre-del-modelo`.
 
 También se puede hacer sin CLI desde el panel de Supabase: **Edge Functions → Deploy a new function → Via Editor**, nombre `chat`, pegar `supabase/functions/chat/index.ts`, desactivar **Verify JWT** en sus ajustes, y poner los secretos en **Edge Functions → Secrets**.
 
