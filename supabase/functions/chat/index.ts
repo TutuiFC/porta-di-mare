@@ -7,7 +7,7 @@
 //   ALLOWED_ORIGIN     opcional: dominios que pueden usar el chat, separados por comas
 //                      (p. ej. https://tuusuario.github.io). Sin él, cualquiera.
 //   CHAT_MODEL         opcional: modelo de Claude (por defecto claude-opus-5-5)
-// SUPABASE_URL y SUPABASE_ANON_KEY los pone Supabase solo.
+// SUPABASE_URL y las claves internas (SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY) los pone Supabase solo.
 
 import Anthropic from "npm:@anthropic-ai/sdk@1.8.0";
 import { betaTool } from "npm:@anthropic-ai/sdk@1.8.0/helpers/beta/json-schema";
@@ -17,7 +17,9 @@ const MODEL = Deno.env.get("CHAT_MODEL") || "claude-opus-5-5";
 // Si el modelo rechaza una petición por seguridad, la API la reintenta en otro modelo (solo Opus/Sonnet 5.5).
 const CON_FALLBACK = MODEL === "claude-opus-5-5" || MODEL === "claude-sonnet-5-5";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+// Clave para llamar a pedir_reserva(): la anon clásica si existe; si no, la de servidor que Supabase
+// pone en la función (nunca sale de aquí). Las dos pasan por las mismas validaciones de la base de datos.
+const SUPABASE_KEY = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const ORIGENES = (Deno.env.get("ALLOWED_ORIGIN") || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 // Límites para que nadie gaste la clave con conversaciones eternas
@@ -75,7 +77,7 @@ function json(req: Request, status: number, data: unknown) {
 async function pedirReserva(r: { nombre: string; personas: number; dia: string; servicio: string; hora: string; telefono: string; notas: string }) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/pedir_reserva`, {
     method: "POST",
-    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" },
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ p_n: r.nombre, p_p: r.personas, p_d: r.dia, p_s: r.servicio, p_h: r.hora, p_x: r.notas || "", p_tel: r.telefono, p_origen: "Chat" }),
   });
   if (res.ok) return { ok: true as const };
