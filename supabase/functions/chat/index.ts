@@ -73,6 +73,7 @@ function json(req: Request, status: number, data: unknown) {
 async function pedirReserva(r: { nombre: string; personas: number; dia: string; servicio: string; hora: string; telefono: string; notas: string }) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/pedir_reserva`, {
     method: "POST",
+    signal: AbortSignal.timeout(15000),
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ p_n: r.nombre, p_p: r.personas, p_d: r.dia, p_s: r.servicio, p_h: r.hora, p_x: r.notas || "", p_tel: r.telefono, p_origen: "Chat" }),
   });
@@ -111,8 +112,10 @@ class ErrorGemini extends Error {
 }
 
 async function gemini(contenidos: Contenido[], sistema: string) {
+  const t0 = Date.now();
   const res = await fetch(GEMINI_URL, {
     method: "POST",
+    signal: AbortSignal.timeout(25000),   // si Gemini no contesta en 25 s, se corta y se avisa
     headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: sistema }] },
@@ -122,6 +125,7 @@ async function gemini(contenidos: Contenido[], sistema: string) {
     }),
   });
   const j = await res.json().catch(() => ({}));
+  console.log(`Gemini ${MODELO}: HTTP ${res.status} en ${Date.now() - t0} ms`);
   if (!res.ok) throw new ErrorGemini(res.status, j?.error?.message || `Gemini respondió ${res.status}`);
   return j as { candidates?: { content?: Contenido; finishReason?: string }[] };
 }
@@ -200,8 +204,8 @@ Deno.serve(async (req) => {
     }
     return json(req, 200, { reply: reserva ? "¡Listo! Hemos recibido tu petición." : "Perdona, ¿me lo puedes repetir?", reserva });
   } catch (e) {
-    console.error(e);
-    const ocupado = e instanceof ErrorGemini && (e.status === 429 || e.status >= 500);
+    console.error("Fallo del asistente:", e instanceof Error ? `${e.name}: ${e.message}` : e);
+    const ocupado = (e instanceof ErrorGemini && (e.status === 429 || e.status >= 500)) || (e instanceof Error && e.name === "TimeoutError");
     return json(req, ocupado ? 503 : 500, {
       error: ocupado ? "El asistente está ocupado ahora mismo" : "El asistente no está disponible",
       reserva,
