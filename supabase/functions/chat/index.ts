@@ -15,12 +15,20 @@
 //   GEMINI_ESPERA_MS   opcional: cuánto esperar a Gemini antes de pasar a DeepSeek (por defecto 12000)
 //   TELEGRAM_BOT_TOKEN opcional: token del bot de Telegram (clientes por Telegram + avisos al restaurante)
 //   TELEGRAM_ADMIN     opcional: usuario de Telegram del restaurante (sin @); solo él puede activar los avisos
+//   GEMINI_TTS_MODEL   opcional: modelo de voz para contestar notas de voz (por defecto gemini-3.8-flash-lite-tts)
+//   GEMINI_VOZ         opcional: voz de Gemini (por defecto Kore)
+//
+// Telegram: entiende notas de voz (Gemini las transcribe) y, si el cliente habla por voz, contesta con voz.
 //
 // Rutas: POST /chat (web) · POST /chat?telegram=1 (webhook) · GET /chat?telegram_setup=1 (conectar el bot)
 //        POST /chat?aviso=1 (lo llama la base de datos al entrar una petición)
 // SUPABASE_URL y las claves internas (SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY) los pone Supabase solo.
 
+import { Mp3Encoder } from "npm:@breezystack/lamejs@1.2.7";
+
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
+const TTS_MODELO = Deno.env.get("GEMINI_TTS_MODEL") || "gemini-3.8-flash-lite-tts";
+const VOZ = Deno.env.get("GEMINI_VOZ") || "Kore";
 const MODELO = Deno.env.get("GEMINI_MODEL") || "gemini-3.5-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent`;
 const GEMINI_ESPERA_MS = Number(Deno.env.get("GEMINI_ESPERA_MS")) || 12000;
@@ -287,24 +295,163 @@ const URL_FUNCION = `${SUPABASE_URL}/functions/v1/chat`;
 const PANEL = "https://tutuifc.github.io/porta-di-mare/panel.html";
 
 const BIENVENIDA: Record<string, string> = {
-  es: "¡Hola! Soy el asistente de Porta di Mare 🍕 Te ayudo a pedir mesa o a resolver dudas sobre la carta y el horario. ¿Para qué día y cuántas personas?",
-  ca: "Hola! Sóc l'assistent de Porta di Mare 🍕 T'ajudo a demanar taula o amb dubtes sobre la carta i l'horari. Per a quin dia i quantes persones?",
-  en: "Hi! I'm the Porta di Mare assistant 🍕 I can help you book a table or answer questions about the menu and opening hours. Which day, and how many people?",
+  es: "¡Hola! Soy el asistente de Porta di Mare 🍕 Te ayudo a pedir mesa o a resolver dudas sobre la carta y el horario. Puedes escribirme o mandarme un audio. ¿Para qué día y cuántas personas?",
+  ca: "Hola! Sóc l'assistent de Porta di Mare 🍕 T'ajudo a demanar taula o amb dubtes sobre la carta i l'horari. Pots escriure'm o enviar-me un àudio. Per a quin dia i quantes persones?",
+  en: "Hi! I'm the Porta di Mare assistant 🍕 I can help you book a table or answer questions about the menu and opening hours. You can type or send me a voice message. Which day, and how many people?",
 };
 const CANAL_TELEGRAM = "Canal: el cliente te escribe por mensajería (Telegram, como si fuera el WhatsApp del restaurante). Mensajes cortos. No ves su número de teléfono: pídeselo igualmente para la reserva.";
 
-async function atenderTelegram(update: { message?: { chat: { id: number; type: string }; from?: { username?: string; language_code?: string; first_name?: string }; text?: string } }) {
+const CANAL_VOZ = "Este mensaje del cliente es una nota de voz (transcrita) y tu respuesta se le enviará como audio con voz: frases cortas y naturales para decir en voz alta, sin emojis, sin enlaces ni símbolos. Di las horas, fechas y precios como se pronuncian.";
+
+/* ——— Notas de voz: Telegram → texto (Gemini) y texto → voz (Gemini TTS → MP3) ——— */
+function aBase64(b: Uint8Array) {
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function deBase64(s: string) {
+  const b = atob(s), u = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+  return u;
+}
+
+async function descargarDeTelegram(fileId: string) {
+  const f = await tg("getFile", { file_id: fileId });
+  const ruta = f?.result?.file_path;
+  if (!f?.ok || !ruta) throw new Error("Telegram no ha dado el archivo");
+  if ((f.result.file_size || 0) > 10 * 1024 * 1024) throw new Error("Audio demasiado grande");
+  const res = await fetch(`https://api.telegram.org/file/bot${TG_TOKEN}/${ruta}`, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`Descarga del audio: HTTP ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+const INAUDIBLE = "[inaudible]";
+async function transcribir(audio: Uint8Array, mime: string) {
+  const t0 = Date.now();
+  const res = await fetch(GEMINI_URL, {
+    method: "POST",
+    signal: AbortSignal.timeout(25000),
+    headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [
+        { inlineData: { mimeType: mime, data: aBase64(audio) } },
+        { text: `Transcribe literalmente lo que dice este audio, en su idioma original. Devuelve solo la transcripción, sin comillas ni comentarios. Si no hay voz o no se entiende, devuelve exactamente ${INAUDIBLE}` },
+      ] }],
+      generationConfig: { maxOutputTokens: 1024 },
+    }),
+  });
+  const j = await res.json().catch(() => ({}));
+  console.log(`Transcripción ${MODELO}: HTTP ${res.status} en ${Date.now() - t0} ms`);
+  if (!res.ok) throw new ErrorIA(res.status, j?.error?.message || `Gemini respondió ${res.status}`);
+  const partes: Parte[] = j?.candidates?.[0]?.content?.parts || [];
+  return partes.filter((p) => typeof p.text === "string" && !p.thought).map((p) => p.text).join("").trim();
+}
+
+/* Gemini devuelve WAV (o PCM crudo) a 24 kHz, 16 bits, mono; Telegram quiere la nota de voz en MP3/OGG */
+function pcmDe(audio: Uint8Array) {
+  let rate = 24000, ini = 0, fin = audio.length;
+  const v = new DataView(audio.buffer, audio.byteOffset, audio.byteLength);
+  const id = (o: number) => String.fromCharCode(audio[o], audio[o + 1], audio[o + 2], audio[o + 3]);
+  if (audio.length > 12 && id(0) === "RIFF" && id(8) === "WAVE") {
+    for (let o = 12; o + 8 <= audio.length;) {
+      const tam = v.getUint32(o + 4, true);
+      if (id(o) === "fmt ") rate = v.getUint32(o + 12, true);
+      if (id(o) === "data") { ini = o + 8; fin = Math.min(audio.length, ini + tam); break; }
+      o += 8 + tam + (tam % 2);
+    }
+  }
+  const muestras = new Int16Array(Math.floor((fin - ini) / 2));
+  for (let i = 0; i < muestras.length; i++) muestras[i] = v.getInt16(ini + i * 2, true);
+  return { muestras, rate };
+}
+function aMp3(audio: Uint8Array) {
+  const { muestras, rate } = pcmDe(audio);
+  const enc = new Mp3Encoder(1, rate, 48), trozos: Uint8Array[] = [];
+  for (let i = 0; i < muestras.length; i += 1152) { const b = enc.encodeBuffer(muestras.subarray(i, i + 1152)); if (b.length) trozos.push(b); }
+  const f = enc.flush(); if (f.length) trozos.push(f);
+  const out = new Uint8Array(trozos.reduce((a, b) => a + b.length, 0));
+  let o = 0; for (const t of trozos) { out.set(t, o); o += t.length; }
+  return out;
+}
+
+async function hablar(texto: string) {
+  const t0 = Date.now();
+  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    method: "POST",
+    signal: AbortSignal.timeout(30000),
+    headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+    body: JSON.stringify({
+      model: TTS_MODELO,
+      input: [{ type: "user_input", content: [{ type: "text", text: texto, annotations: [{ type: "speech_metadata", style: "cálido, cercano y natural, como un camarero amable" }] }] }],
+      response_format: { type: "audio" },
+      generation_config: { speech_config: [{ voice: VOZ }] },
+    }),
+  });
+  const j = await res.json().catch(() => ({}));
+  console.log(`Voz ${TTS_MODELO}: HTTP ${res.status} en ${Date.now() - t0} ms`);
+  if (!res.ok) throw new ErrorIA(res.status, j?.error?.message || `Gemini (voz) respondió ${res.status}`);
+  let datos = "";
+  for (const s of j?.steps || []) for (const c of s?.content || []) if (c?.type === "audio" && c.data) datos = c.data;
+  if (!datos) throw new Error("Gemini no ha devuelto audio");
+  return aMp3(deBase64(datos));
+}
+
+/* Manda la respuesta como nota de voz (con el texto debajo). Si algo falla, devuelve false y se manda en texto. */
+async function responderConVoz(chat: number, texto: string) {
+  if (texto.length > 700) return false;   // respuestas largas, mejor por escrito
+  try {
+    tg("sendChatAction", { chat_id: chat, action: "record_voice" });
+    const mp3 = await hablar(texto.replace(/\p{Extended_Pictographic}|️/gu, "").replace(/[ \t]{2,}/g, " ").trim());
+    const form = new FormData();
+    form.append("chat_id", String(chat));
+    form.append("voice", new Blob([mp3], { type: "audio/mpeg" }), "porta-di-mare.mp3");
+    form.append("caption", texto.slice(0, 1024));
+    const res = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendVoice`, { method: "POST", body: form, signal: AbortSignal.timeout(20000) });
+    const j = await res.json().catch(() => ({ ok: false }));
+    if (!j.ok) throw new Error(`sendVoice: ${j.description || res.status}`);
+    return true;
+  } catch (e) {
+    console.error("Voz:", e instanceof Error ? `${e.name}: ${e.message}` : e);
+    return false;
+  }
+}
+
+type MensajeTG = {
+  chat: { id: number; type: string };
+  from?: { username?: string; language_code?: string; first_name?: string };
+  text?: string;
+  voice?: { file_id: string; duration: number; mime_type?: string };
+};
+
+async function atenderTelegram(update: { message?: MensajeTG }) {
   const m = update.message;
-  if (!m?.text || m.chat.type !== "private") return;
-  const chat = m.chat.id, texto = m.text.trim().slice(0, MAX_CARACTERES);
+  if (!m || m.chat.type !== "private" || (!m.text && !m.voice)) return;
+  const chat = m.chat.id;
   const idioma = (m.from?.language_code || "es").slice(0, 2);
   const responde = (t: string) => tg("sendMessage", { chat_id: chat, text: t });
 
-  if (/^\/start\b/.test(texto) || /^\/nueva\b/.test(texto)) {
+  /* Nota de voz: se pasa a texto y a partir de ahí es una conversación normal */
+  let texto = "", porVoz = false;
+  if (m.text) texto = m.text.trim().slice(0, MAX_CARACTERES);
+  else if (m.voice) {
+    if (m.voice.duration > 120) return responde("El audio es muy largo. ¿Me mandas uno de menos de 2 minutos o me lo escribes?");
+    if (!GEMINI_API_KEY) return responde("Ahora mismo no puedo escuchar audios. ¿Me lo escribes, por favor?");
+    tg("sendChatAction", { chat_id: chat, action: "typing" });
+    try {
+      texto = (await transcribir(await descargarDeTelegram(m.voice.file_id), m.voice.mime_type || "audio/ogg")).slice(0, MAX_CARACTERES);
+    } catch (e) {
+      console.error("Audio:", e instanceof Error ? `${e.name}: ${e.message}` : e);
+      return responde("Ahora mismo no puedo escuchar audios. ¿Me lo escribes, por favor?");
+    }
+    if (!texto || texto.includes(INAUDIBLE)) return responde("No he entendido bien el audio. ¿Me lo repites o me lo escribes?");
+    porVoz = true;
+  }
+
+  if (!porVoz && (/^\/start\b/.test(texto) || /^\/nueva\b/.test(texto))) {
     await bd(`telegram_mensajes?chat_id=eq.${chat}`, { method: "DELETE" });
     return responde(BIENVENIDA[idioma] || BIENVENIDA.es);
   }
-  if (/^\/avisos\b/.test(texto)) {
+  if (!porVoz && /^\/avisos\b/.test(texto)) {
     const usuario = (m.from?.username || "").toLowerCase();
     if (!TG_ADMIN || usuario !== TG_ADMIN) return responde("Este comando es solo para el restaurante.");
     await bd("ajustes?id=eq.1", { method: "PATCH", body: JSON.stringify({ telegram_aviso_chat: chat }) });
@@ -321,11 +468,11 @@ async function atenderTelegram(update: { message?: { chat: { id: number; type: s
   }
   while (textos.length && textos[0].role !== "user") textos.shift();
 
-  tg("sendChatAction", { chat_id: chat, action: "typing" });
+  if (!porVoz) tg("sendChatAction", { chat_id: chat, action: "typing" });
   const estado: Estado = { reserva: null, origen: "Telegram" };
   let respuesta: string;
   try {
-    respuesta = (await responder(textos, sistemaDeHoy(CANAL_TELEGRAM), estado)).texto || "¿Me lo repites, por favor?";
+    respuesta = (await responder(textos, sistemaDeHoy(CANAL_TELEGRAM + (porVoz ? "\n" + CANAL_VOZ : "")), estado)).texto || "¿Me lo repites, por favor?";
   } catch (e) {
     console.error("Fallo del asistente (Telegram):", e instanceof Error ? `${e.name}: ${e.message}` : e);
     respuesta = "Ahora mismo no puedo responder. Llámanos al 633 45 06 54 y te atendemos.";
@@ -334,6 +481,7 @@ async function atenderTelegram(update: { message?: { chat: { id: number; type: s
     { chat_id: chat, role: "user", content: texto },
     { chat_id: chat, role: "assistant", content: respuesta },
   ]) });
+  if (porVoz && (await responderConVoz(chat, respuesta))) return;
   await responde(respuesta);
 }
 

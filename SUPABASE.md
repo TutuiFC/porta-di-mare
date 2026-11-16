@@ -65,6 +65,8 @@ El mismo asistente atiende por Telegram, como si fuera el WhatsApp del restauran
 
 Las reservas del bot entran como «Por confirmar» y «Vía Telegram».
 
+**Notas de voz.** El bot entiende audios: Gemini los transcribe y la conversación sigue igual. Si el cliente habla por voz, el bot contesta con una nota de voz (con el texto debajo), generada con el modelo de voz de Gemini (`GEMINI_TTS_MODEL`, por defecto `gemini-3.8-flash-lite-tts`; voz `GEMINI_VOZ`, por defecto `Kore`). Si la voz falla o se acaba la cuota, contesta por escrito. Si Gemini está caído, pide que se lo escriban (DeepSeek no entiende audio).
+
 ## 5. Publicar en GitHub Pages
 
 1. Sube el contenido de esta carpeta `web` a un repositorio de GitHub.
