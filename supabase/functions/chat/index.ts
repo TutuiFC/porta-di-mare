@@ -148,7 +148,13 @@ Deno.serve(async (req) => {
     };
     const base = "https://generativelanguage.googleapis.com/v1beta";
     const cuerpo = JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Di hola" }] }], generationConfig: { maxOutputTokens: 50 } });
+    let flash: string[] = [];
+    try {
+      const l = await fetch(`${base}/models?pageSize=1000`, { headers: { "x-goog-api-key": GEMINI_API_KEY }, signal: AbortSignal.timeout(15000) }).then((r) => r.json());
+      flash = (l.models || []).map((m: { name: string }) => m.name.replace("models/", "")).filter((n: string) => /flash/i.test(n));
+    } catch (_) { flash = ["(no se pudo listar)"]; }
     return json(req, 200, {
+      modelos_flash: flash,
       clave_formato: GEMINI_API_KEY ? GEMINI_API_KEY.slice(0, 3) + "… (" + GEMINI_API_KEY.length + " caracteres)" : "sin clave",
       sin_clave: await prueba(`${base}/models?pageSize=1`),
       modelos_cabecera: await prueba(`${base}/models?pageSize=1`, { headers: { "x-goog-api-key": GEMINI_API_KEY } }),
