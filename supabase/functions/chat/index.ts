@@ -136,6 +136,26 @@ function texto(c?: Contenido) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
+  /* Diagnóstico temporal: GET ?diag=1 → comprueba la conexión con Gemini (solo códigos y tiempos, nunca la clave) */
+  if (req.method === "GET" && new URL(req.url).searchParams.get("diag") === "1") {
+    const prueba = async (url: string, init: RequestInit = {}) => {
+      const t0 = Date.now();
+      try {
+        const r = await fetch(url, { ...init, signal: AbortSignal.timeout(20000) });
+        const txt = await r.text();
+        return { http: r.status, ms: Date.now() - t0, inicio: txt.slice(0, 160) };
+      } catch (e) { return { error: e instanceof Error ? e.name : String(e), ms: Date.now() - t0 }; }
+    };
+    const base = "https://generativelanguage.googleapis.com/v1beta";
+    const cuerpo = JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Di hola" }] }], generationConfig: { maxOutputTokens: 50 } });
+    return json(req, 200, {
+      clave_formato: GEMINI_API_KEY ? GEMINI_API_KEY.slice(0, 3) + "… (" + GEMINI_API_KEY.length + " caracteres)" : "sin clave",
+      sin_clave: await prueba(`${base}/models?pageSize=1`),
+      modelos_cabecera: await prueba(`${base}/models?pageSize=1`, { headers: { "x-goog-api-key": GEMINI_API_KEY } }),
+      modelos_parametro: await prueba(`${base}/models?pageSize=1&key=${encodeURIComponent(GEMINI_API_KEY)}`),
+      generar: await prueba(`${base}/models/${MODELO}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY }, body: cuerpo }),
+    });
+  }
   if (req.method !== "POST") return json(req, 405, { error: "Solo POST" });
   if (ORIGENES.length && !ORIGENES.includes(req.headers.get("origin") || "")) return json(req, 403, { error: "Origen no permitido" });
   if (!GEMINI_API_KEY) return json(req, 500, { error: "Falta la clave de Gemini" });
