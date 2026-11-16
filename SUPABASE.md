@@ -1,11 +1,11 @@
 # Porta di Mare · poner en marcha reservas, panel y asistente
 
-La web se publica en **GitHub Pages** (solo archivos). Las reservas viven en **Supabase** (base de datos en la nube, plan gratuito) y el asistente usa **Claude** a través de una función de Supabase, para que la clave de la IA nunca esté en la web.
+La web se publica en **GitHub Pages** (solo archivos). Las reservas viven en **Supabase** (base de datos en la nube, plan gratuito) y el asistente usa **Google Gemini** (plan gratuito) a través de una función de Supabase, para que la clave de la IA nunca esté en la web.
 
 ```
 Formulario de la web ──┐
                        ├─► pedir_reserva()  ─►  tabla «reservas»  ◄── panel.html (con email y contraseña)
-Asistente (chat.js) ───► función «chat» (Claude)
+Asistente (chat.js) ───► función «chat» (Gemini)
 ```
 
 ## 1. Crear el proyecto de Supabase
@@ -30,7 +30,7 @@ window.PDM_SUPABASE = {
 };
 ```
 
-La clave *anon* es pública a propósito: con las reglas de `schema.sql` solo sirve para pedir reservas. **Nunca** pongas ahí la clave *service_role* ni la de Anthropic.
+La clave *anon* es pública a propósito: con las reglas de `schema.sql` solo sirve para pedir reservas. **Nunca** pongas ahí la clave *service_role* ni la de Gemini.
 
 ## 4. Publicar el asistente (función «chat»)
 
@@ -39,16 +39,16 @@ Necesitas la CLI de Supabase (<https://supabase.com/docs/guides/cli>). En la car
 ```bash
 supabase login
 supabase link --project-ref xxxxxxxx
-supabase secrets set ANTHROPIC_API_KEY=tu-clave-de-anthropic
+supabase secrets set GEMINI_API_KEY=tu-clave-de-gemini
 supabase secrets set ALLOWED_ORIGIN=https://tuusuario.github.io
 supabase functions deploy chat --no-verify-jwt
 ```
 
 `--no-verify-jwt` deja que la web llame al asistente sin iniciar sesión (es público, como el formulario); lo que lo protege es `ALLOWED_ORIGIN` y los límites de la función.
 
-- `ANTHROPIC_API_KEY`: la clave de <https://console.anthropic.com>. Se guarda en Supabase, nunca en la web ni en GitHub.
+- `GEMINI_API_KEY`: la clave de Google AI Studio (<https://aistudio.google.com> → Get API key). Es gratuita y no pide tarjeta. Se guarda en Supabase, nunca en la web ni en GitHub.
 - `ALLOWED_ORIGIN`: el dominio de tu GitHub Pages (sin barra final). Así otras webs no pueden usar tu asistente ni gastar tu clave.
-- Modelo: por defecto `claude-opus-5-5`. Para gastar menos, `supabase secrets set CHAT_MODEL=claude-haiku-5-5` y vuelve a desplegar.
+- Modelo: por defecto `gemini-flash-latest` (el Flash gratuito más reciente). Para fijar otro: `supabase secrets set GEMINI_MODEL=nombre-del-modelo`.
 
 También se puede hacer sin CLI desde el panel de Supabase: **Edge Functions → Deploy a new function → Via Editor**, nombre `chat`, pegar `supabase/functions/chat/index.ts`, desactivar **Verify JWT** en sus ajustes, y poner los secretos en **Edge Functions → Secrets**.
 
@@ -71,6 +71,6 @@ No subas `_copia_antes_rediseno/`, `.impeccable/`, `DESIGN.md` ni `PRODUCT.md` s
 
 ## Límites y costes a tener en cuenta
 
-- Cada mensaje del asistente es una llamada a la API de Anthropic, que se paga por uso. La función limita las conversaciones a 30 mensajes de 1000 caracteres. Pon un límite de gasto en la consola de Anthropic.
+- El plan gratuito de Gemini tiene un límite de peticiones por minuto y por día (se ve en Google AI Studio). Si se supera, el asistente responde que está ocupado y la web sigue ofreciendo el WhatsApp. La función limita las conversaciones a 30 mensajes de 1000 caracteres.
 - La función `pedir_reserva()` es pública: alguien podría llenar el libro de peticiones falsas. Si pasa, se puede añadir un captcha (p. ej. Cloudflare Turnstile).
 - El panel carga las reservas de los últimos 120 días hacia delante.

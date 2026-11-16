@@ -1,5 +1,5 @@
 /* Porta di Mare · asistente de reservas con IA.
-   Habla con la función «chat» de Supabase (supabase/functions/chat), que usa Claude y guarda la petición
+   Habla con la función «chat» de Supabase (supabase/functions/chat), que usa Google Gemini y guarda la petición
    en la base de datos; el panel la ve como «Por confirmar».
    Mientras supabase-config.js esté vacío, el asistente sale apagado: avisa de que no funciona y da el teléfono. */
 (function () {

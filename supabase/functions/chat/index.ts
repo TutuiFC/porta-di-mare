@@ -1,21 +1,17 @@
-// Porta di Mare · asistente de reservas (Supabase Edge Function, Deno).
-// La web le manda la conversación; Claude responde y, cuando el cliente confirma los datos,
+// Porta di Mare · asistente de reservas (Supabase Edge Function, Deno) con Google Gemini.
+// La web le manda la conversación; Gemini responde y, cuando el cliente confirma los datos,
 // llama a la herramienta crear_reserva, que guarda la petición como «pendiente» en la base de datos.
 //
 // Secretos (Supabase → Edge Functions → Secrets):
-//   ANTHROPIC_API_KEY  la clave de la API de Anthropic (obligatoria; nunca va en la web)
-//   ALLOWED_ORIGIN     opcional: dominios que pueden usar el chat, separados por comas
-//                      (p. ej. https://tuusuario.github.io). Sin él, cualquiera.
-//   CHAT_MODEL         opcional: modelo de Claude (por defecto claude-opus-5-5)
+//   GEMINI_API_KEY   la clave de Google AI Studio (obligatoria; nunca va en la web)
+//   ALLOWED_ORIGIN   opcional: dominios que pueden usar el chat, separados por comas
+//                    (p. ej. https://tuusuario.github.io). Sin él, cualquiera.
+//   GEMINI_MODEL     opcional: modelo de Gemini (por defecto gemini-flash-latest, el Flash gratuito más reciente)
 // SUPABASE_URL y las claves internas (SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY) los pone Supabase solo.
 
-import Anthropic from "npm:@anthropic-ai/sdk@1.8.0";
-import { betaTool } from "npm:@anthropic-ai/sdk@1.8.0/helpers/beta/json-schema";
-
-const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
-const MODEL = Deno.env.get("CHAT_MODEL") || "claude-opus-5-5";
-// Si el modelo rechaza una petición por seguridad, la API la reintenta en otro modelo (solo Opus/Sonnet 5.5).
-const CON_FALLBACK = MODEL === "claude-opus-5-5" || MODEL === "claude-sonnet-5-5";
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
+const MODELO = Deno.env.get("GEMINI_MODEL") || "gemini-flash-latest";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent`;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 // Clave para llamar a pedir_reserva(): la anon clásica si existe; si no, la de servidor que Supabase
 // pone en la función (nunca sale de aquí). Las dos pasan por las mismas validaciones de la base de datos.
@@ -26,7 +22,7 @@ const ORIGENES = (Deno.env.get("ALLOWED_ORIGIN") || "").split(",").map((s) => s.
 const MAX_MENSAJES = 30;
 const MAX_CARACTERES = 1000;
 
-/* Lo que sabe el asistente. Fijo, para que la caché de Claude lo reaproveche entre peticiones. */
+/* Lo que sabe el asistente */
 const SISTEMA = `Eres el asistente de reservas de Porta di Mare, «Ristorante · Terrazza · Crew», un restaurante italiano con horno de leña y terraza en Premià de Mar.
 
 Datos del restaurante:
@@ -85,12 +81,62 @@ async function pedirReserva(r: { nombre: string; personas: number; dia: string; 
   return { ok: false as const, error: String(err.message || "No se ha podido guardar la reserva") };
 }
 
+/* ——— Gemini ——— */
+type Parte = { text?: string; functionCall?: { name: string; args?: Record<string, unknown> }; functionResponse?: unknown; thought?: boolean; [k: string]: unknown };
+type Contenido = { role: "user" | "model"; parts: Parte[] };
+
+const HERRAMIENTAS = [{
+  functionDeclarations: [{
+    name: "crear_reserva",
+    description: "Guarda la petición de reserva en el libro del restaurante como pendiente de confirmar. Úsala una sola vez y solo después de que el cliente haya confirmado explícitamente el resumen.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        nombre: { type: "STRING", description: "Nombre de quien reserva" },
+        personas: { type: "INTEGER", description: "Número de personas, de 1 a 80" },
+        dia: { type: "STRING", description: "Fecha en formato AAAA-MM-DD" },
+        servicio: { type: "STRING", format: "enum", enum: ["Comida", "Cena"], description: "Comida (12:00-16:00) o Cena (20:00-23:00)" },
+        hora: { type: "STRING", description: "Hora de llegada en formato HH:MM, 24 h" },
+        telefono: { type: "STRING", description: "Teléfono de contacto" },
+        notas: { type: "STRING", description: "Celebración, alergias, terraza, trona… Cadena vacía si no hay" },
+      },
+      required: ["nombre", "personas", "dia", "servicio", "hora", "telefono", "notas"],
+    },
+  }],
+}];
+
+class ErrorGemini extends Error {
+  status: number;
+  constructor(status: number, msg: string) { super(msg); this.status = status; }
+}
+
+async function gemini(contenidos: Contenido[], sistema: string) {
+  const res = await fetch(GEMINI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: sistema }] },
+      contents: contenidos,
+      tools: HERRAMIENTAS,
+      generationConfig: { maxOutputTokens: 2048 },
+    }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ErrorGemini(res.status, j?.error?.message || `Gemini respondió ${res.status}`);
+  return j as { candidates?: { content?: Contenido; finishReason?: string }[] };
+}
+
+function texto(c?: Contenido) {
+  return (c?.parts || []).filter((p) => typeof p.text === "string" && !p.thought).map((p) => p.text).join("").trim();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
   if (req.method !== "POST") return json(req, 405, { error: "Solo POST" });
   if (ORIGENES.length && !ORIGENES.includes(req.headers.get("origin") || "")) return json(req, 403, { error: "Origen no permitido" });
+  if (!GEMINI_API_KEY) return json(req, 500, { error: "Falta la clave de Gemini" });
 
-  /* Solo se aceptan textos de usuario y asistente, alternos, terminando en el usuario */
+  /* Solo se aceptan textos de cliente y asistente, alternos, terminando en el cliente */
   let entrada: { role: string; content: string }[];
   try {
     const body = await req.json();
@@ -98,73 +144,64 @@ Deno.serve(async (req) => {
   } catch {
     return json(req, 400, { error: "JSON no válido" });
   }
-  const mensajes: Anthropic.Beta.BetaMessageParam[] = [];
+  const contenidos: Contenido[] = [];
   for (const m of entrada.slice(-MAX_MENSAJES)) {
     if ((m?.role !== "user" && m?.role !== "assistant") || typeof m.content !== "string") return json(req, 400, { error: "Mensaje no válido" });
-    const texto = m.content.trim().slice(0, MAX_CARACTERES);
-    if (!texto) continue;
-    const ultimo = mensajes[mensajes.length - 1];
-    if (ultimo && ultimo.role === m.role) ultimo.content += "\n" + texto;
-    else mensajes.push({ role: m.role, content: texto });
+    const t = m.content.trim().slice(0, MAX_CARACTERES);
+    if (!t) continue;
+    const rol = m.role === "user" ? "user" : "model";
+    const ultimo = contenidos[contenidos.length - 1];
+    if (ultimo && ultimo.role === rol) ultimo.parts[0].text += "\n" + t;
+    else contenidos.push({ role: rol, parts: [{ text: t }] });
   }
-  while (mensajes.length && mensajes[0].role !== "user") mensajes.shift();
-  if (!mensajes.length || mensajes[mensajes.length - 1].role !== "user") return json(req, 400, { error: "Falta el mensaje del cliente" });
-
-  let reserva: Record<string, unknown> | null = null;
-  const crearReserva = betaTool({
-    name: "crear_reserva",
-    description: "Guarda la petición de reserva en el libro del restaurante como pendiente de confirmar. Úsala una sola vez y solo después de que el cliente haya confirmado explícitamente el resumen.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        nombre: { type: "string", description: "Nombre de quien reserva" },
-        personas: { type: "integer", description: "Número de personas, de 1 a 80" },
-        dia: { type: "string", description: "Fecha en formato AAAA-MM-DD" },
-        servicio: { type: "string", enum: ["Comida", "Cena"], description: "Comida (12:00-16:00) o Cena (20:00-23:00)" },
-        hora: { type: "string", description: "Hora de llegada en formato HH:MM, 24 h" },
-        telefono: { type: "string", description: "Teléfono de contacto" },
-        notas: { type: "string", description: "Celebración, alergias, terraza, trona… Cadena vacía si no hay" },
-      },
-      required: ["nombre", "personas", "dia", "servicio", "hora", "telefono", "notas"],
-      additionalProperties: false,
-    },
-    run: async (input) => {
-      if (reserva) return "Ya se ha guardado una reserva en esta conversación. No guardes otra.";
-      const r = await pedirReserva(input as Parameters<typeof pedirReserva>[0]);
-      if (!r.ok) return `ERROR: ${r.error}. La reserva NO se ha guardado.`;
-      reserva = { nombre: input.nombre, personas: input.personas, dia: input.dia, servicio: input.servicio, hora: input.hora };
-      return "Petición guardada como pendiente. El restaurante la confirmará por teléfono o WhatsApp.";
-    },
-  });
+  while (contenidos.length && contenidos[0].role !== "user") contenidos.shift();
+  if (!contenidos.length || contenidos[contenidos.length - 1].role !== "user") return json(req, 400, { error: "Falta el mensaje del cliente" });
 
   const hoy = hoyEnMadrid();
-  try {
-    const final = await client.beta.messages.toolRunner({
-      model: MODEL,
-      max_tokens: 4000,
-      max_iterations: 4,
-      output_config: { effort: "low" },
-      ...(CON_FALLBACK ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {}),
-      system: [
-        { type: "text", text: SISTEMA, cache_control: { type: "ephemeral" } },
-        { type: "text", text: `Hoy es ${hoy.dia}, ${hoy.iso} (hora de Madrid).` },
-      ],
-      tools: [{ ...crearReserva, strict: true }],
-      messages: mensajes,
-    });
+  const sistema = `${SISTEMA}\n\nHoy es ${hoy.dia}, ${hoy.iso} (hora de Madrid).`;
+  let reserva: Record<string, unknown> | null = null;
 
-    if (final.stop_reason === "refusal") {
-      return json(req, 200, { reply: "Perdona, con eso no puedo ayudarte. Para cualquier duda, llámanos al 633 45 06 54.", reserva });
+  try {
+    /* Bucle corto: Gemini puede pedir guardar la reserva y luego contestar al cliente */
+    for (let vuelta = 0; vuelta < 4; vuelta++) {
+      const r = await gemini(contenidos, sistema);
+      const cand = r.candidates?.[0];
+      if (!cand?.content) {
+        return json(req, 200, { reply: "Perdona, con eso no puedo ayudarte. Para cualquier duda, llámanos al 633 45 06 54.", reserva });
+      }
+      // Se devuelve tal cual a Gemini en la siguiente vuelta (incluye sus firmas de razonamiento)
+      contenidos.push({ role: "model", parts: cand.content.parts || [] });
+      const llamadas = (cand.content.parts || []).filter((p) => p.functionCall);
+      if (!llamadas.length) {
+        const t = texto(cand.content);
+        return json(req, 200, { reply: t || (reserva ? "¡Listo! Hemos recibido tu petición." : "¿Me lo repites, por favor?"), reserva });
+      }
+      const respuestas: Parte[] = [];
+      for (const p of llamadas) {
+        const fc = p.functionCall!;
+        let resultado: string;
+        if (fc.name !== "crear_reserva") resultado = "ERROR: herramienta desconocida.";
+        else if (reserva) resultado = "Ya se ha guardado una reserva en esta conversación. No guardes otra.";
+        else {
+          const a = fc.args || {};
+          const datos = {
+            nombre: String(a.nombre ?? ""), personas: Math.round(Number(a.personas)), dia: String(a.dia ?? ""),
+            servicio: String(a.servicio ?? ""), hora: String(a.hora ?? ""), telefono: String(a.telefono ?? ""), notas: String(a.notas ?? ""),
+          };
+          const g = await pedirReserva(datos);
+          if (g.ok) {
+            reserva = { nombre: datos.nombre, personas: datos.personas, dia: datos.dia, servicio: datos.servicio, hora: datos.hora };
+            resultado = "Petición guardada como pendiente. El restaurante la confirmará por teléfono o WhatsApp.";
+          } else resultado = `ERROR: ${g.error}. La reserva NO se ha guardado.`;
+        }
+        respuestas.push({ functionResponse: { name: fc.name, response: { resultado } } });
+      }
+      contenidos.push({ role: "user", parts: respuestas });
     }
-    const texto = final.content
-      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
-    return json(req, 200, { reply: texto || (reserva ? "¡Listo! Hemos recibido tu petición." : "¿Me lo repites, por favor?"), reserva });
+    return json(req, 200, { reply: reserva ? "¡Listo! Hemos recibido tu petición." : "Perdona, ¿me lo puedes repetir?", reserva });
   } catch (e) {
     console.error(e);
-    const ocupado = e instanceof Anthropic.RateLimitError || (e instanceof Anthropic.APIError && (e.status ?? 0) >= 500);
+    const ocupado = e instanceof ErrorGemini && (e.status === 429 || e.status >= 500);
     return json(req, ocupado ? 503 : 500, {
       error: ocupado ? "El asistente está ocupado ahora mismo" : "El asistente no está disponible",
       reserva,
