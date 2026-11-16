@@ -27,6 +27,12 @@
   function hhmm(m) { return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
   function hoy() { return iso(new Date()); }
   function abierto(s) { return !!ABIERTO[deIso(s).getDay()]; }
+  /* El primer día con servicio desde s (incluido); nunca antes de hoy */
+  function siguienteAbierto(s) {
+    var d = deIso(s < hoy() ? hoy() : s);
+    for (var i = 0; i < 7 && !ABIERTO[d.getDay()]; i++) d = suma(d, 1);
+    return iso(d);
+  }
   function corto(s) { var d = deIso(s); return DC[d.getDay()] + ' ' + d.getDate(); }
   function largo(s) { var d = deIso(s); return DL[d.getDay()] + ' ' + d.getDate() + ' de ' + MES[d.getMonth()]; }
   function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
@@ -337,7 +343,7 @@
     if (t.dataset.vista) { vista = t.dataset.vista; store(CLAVE_VISTA, vista); pintar(); return; }
     if (t.dataset.paso) { sel = iso(suma(deIso(sel), +t.dataset.paso)); pintar(); return; }
     if (t.hasAttribute('data-hoy')) { sel = hoy(); pintar(); return; }
-    if (t.hasAttribute('data-abrir-nueva')) { abrirNueva(abierto(sel) ? sel : hoy(), ''); return; }
+    if (t.hasAttribute('data-abrir-nueva')) { abrirNueva(siguienteAbierto(sel), ''); return; }
     if (t.dataset.accion) {
       if (!busca(t.dataset.id)) return;
       t.disabled = true;
