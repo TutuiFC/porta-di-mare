@@ -1,17 +1,27 @@
-// Porta di Mare · asistente de reservas (Supabase Edge Function, Deno) con Google Gemini.
-// La web le manda la conversación; Gemini responde y, cuando el cliente confirma los datos,
+// Porta di Mare · asistente de reservas (Supabase Edge Function, Deno).
+// La web le manda la conversación; la IA responde y, cuando el cliente confirma los datos,
 // llama a la herramienta crear_reserva, que guarda la petición como «pendiente» en la base de datos.
 //
+// IA principal: Google Gemini. Si Gemini está saturado (429), falla (5xx) o tarda más de GEMINI_ESPERA_MS,
+// esa conversación la atiende DeepSeek (solo si hay DEEPSEEK_API_KEY).
+//
 // Secretos (Supabase → Edge Functions → Secrets):
-//   GEMINI_API_KEY   la clave de Google AI Studio (obligatoria; nunca va en la web)
-//   ALLOWED_ORIGIN   opcional: dominios que pueden usar el chat, separados por comas
-//                    (p. ej. https://tuusuario.github.io). Sin él, cualquiera.
-//   GEMINI_MODEL     opcional: modelo de Gemini (por defecto gemini-3.5-flash-lite)
+//   GEMINI_API_KEY     la clave de Google AI Studio (obligatoria; nunca va en la web)
+//   DEEPSEEK_API_KEY   opcional: clave de DeepSeek para la reserva
+//   ALLOWED_ORIGIN     opcional: dominios que pueden usar el chat, separados por comas
+//                      (p. ej. https://tuusuario.github.io). Sin él, cualquiera.
+//   GEMINI_MODEL       opcional: modelo de Gemini (por defecto gemini-3.5-flash-lite)
+//   DEEPSEEK_MODEL     opcional: modelo de DeepSeek (por defecto deepseek-flash, V4.1 Flash)
+//   GEMINI_ESPERA_MS   opcional: cuánto esperar a Gemini antes de pasar a DeepSeek (por defecto 12000)
 // SUPABASE_URL y las claves internas (SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY) los pone Supabase solo.
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
 const MODELO = Deno.env.get("GEMINI_MODEL") || "gemini-3.5-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent`;
+const GEMINI_ESPERA_MS = Number(Deno.env.get("GEMINI_ESPERA_MS")) || 12000;
+const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY") || "";
+const DEEPSEEK_MODELO = Deno.env.get("DEEPSEEK_MODEL") || "deepseek-flash";
+const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 // Clave para llamar a pedir_reserva(): la anon clásica si existe; si no, la de servidor que Supabase
 // pone en la función (nunca sale de aquí). Las dos pasan por las mismas validaciones de la base de datos.
@@ -82,63 +92,148 @@ async function pedirReserva(r: { nombre: string; personas: number; dia: string; 
   return { ok: false as const, error: String(err.message || "No se ha podido guardar la reserva") };
 }
 
+/* ——— La herramienta, igual para las dos IA ——— */
+const HERRAMIENTA = {
+  nombre: "crear_reserva",
+  descripcion: "Guarda la petición de reserva en el libro del restaurante como pendiente de confirmar. Úsala una sola vez y solo después de que el cliente haya confirmado explícitamente el resumen.",
+  parametros: {
+    nombre: { type: "string", description: "Nombre de quien reserva" },
+    personas: { type: "integer", description: "Número de personas, de 1 a 80" },
+    dia: { type: "string", description: "Fecha en formato AAAA-MM-DD" },
+    servicio: { type: "string", enum: ["Comida", "Cena"], description: "Comida (12:00-16:00) o Cena (20:00-23:00)" },
+    hora: { type: "string", description: "Hora de llegada en formato HH:MM, 24 h" },
+    telefono: { type: "string", description: "Teléfono de contacto" },
+    notas: { type: "string", description: "Celebración, alergias, terraza, trona… Cadena vacía si no hay" },
+  } as Record<string, { type: string; description: string; enum?: string[] }>,
+  obligatorios: ["nombre", "personas", "dia", "servicio", "hora", "telefono", "notas"],
+};
+
+type Texto = { role: "user" | "assistant"; content: string };
+type Estado = { reserva: Record<string, unknown> | null };
+
+/* Ejecuta crear_reserva. Si ya se guardó una en esta conversación (con cualquiera de las dos IA), no guarda otra. */
+async function ejecutar(nombre: string, args: Record<string, unknown>, estado: Estado): Promise<string> {
+  if (nombre !== HERRAMIENTA.nombre) return "ERROR: herramienta desconocida.";
+  if (estado.reserva) return "Ya se ha guardado una reserva en esta conversación. No guardes otra.";
+  const datos = {
+    nombre: String(args.nombre ?? ""), personas: Math.round(Number(args.personas)), dia: String(args.dia ?? ""),
+    servicio: String(args.servicio ?? ""), hora: String(args.hora ?? ""), telefono: String(args.telefono ?? ""), notas: String(args.notas ?? ""),
+  };
+  const g = await pedirReserva(datos);
+  if (!g.ok) return `ERROR: ${g.error}. La reserva NO se ha guardado.`;
+  estado.reserva = { nombre: datos.nombre, personas: datos.personas, dia: datos.dia, servicio: datos.servicio, hora: datos.hora };
+  return "Petición guardada como pendiente. El restaurante la confirmará por teléfono o WhatsApp.";
+}
+
+/* Error de una IA que justifica pasar a la otra: saturada, caída o lenta */
+class ErrorIA extends Error {
+  status: number;
+  constructor(status: number, msg: string) { super(msg); this.status = status; }
+}
+function esSaturacion(e: unknown) {
+  if (e instanceof ErrorIA) return e.status === 429 || e.status >= 500;
+  return e instanceof Error && (e.name === "TimeoutError" || e.name === "TypeError");   // tiempo agotado o red
+}
+const RECHAZO = "Perdona, con eso no puedo ayudarte. Para cualquier duda, llámanos al 633 45 06 54.";
+
 /* ——— Gemini ——— */
 type Parte = { text?: string; functionCall?: { name: string; args?: Record<string, unknown> }; functionResponse?: unknown; thought?: boolean; [k: string]: unknown };
 type Contenido = { role: "user" | "model"; parts: Parte[] };
 
-const HERRAMIENTAS = [{
+const GEMINI_TOOLS = [{
   functionDeclarations: [{
-    name: "crear_reserva",
-    description: "Guarda la petición de reserva en el libro del restaurante como pendiente de confirmar. Úsala una sola vez y solo después de que el cliente haya confirmado explícitamente el resumen.",
+    name: HERRAMIENTA.nombre,
+    description: HERRAMIENTA.descripcion,
     parameters: {
       type: "OBJECT",
-      properties: {
-        nombre: { type: "STRING", description: "Nombre de quien reserva" },
-        personas: { type: "INTEGER", description: "Número de personas, de 1 a 80" },
-        dia: { type: "STRING", description: "Fecha en formato AAAA-MM-DD" },
-        servicio: { type: "STRING", format: "enum", enum: ["Comida", "Cena"], description: "Comida (12:00-16:00) o Cena (20:00-23:00)" },
-        hora: { type: "STRING", description: "Hora de llegada en formato HH:MM, 24 h" },
-        telefono: { type: "STRING", description: "Teléfono de contacto" },
-        notas: { type: "STRING", description: "Celebración, alergias, terraza, trona… Cadena vacía si no hay" },
-      },
-      required: ["nombre", "personas", "dia", "servicio", "hora", "telefono", "notas"],
+      properties: Object.fromEntries(Object.entries(HERRAMIENTA.parametros).map(([k, v]) =>
+        [k, { type: v.type.toUpperCase(), description: v.description, ...(v.enum ? { format: "enum", enum: v.enum } : {}) }])),
+      required: HERRAMIENTA.obligatorios,
     },
   }],
 }];
 
-class ErrorGemini extends Error {
-  status: number;
-  constructor(status: number, msg: string) { super(msg); this.status = status; }
-}
-
-async function gemini(contenidos: Contenido[], sistema: string) {
+async function llamarGemini(contenidos: Contenido[], sistema: string) {
   const t0 = Date.now();
   const res = await fetch(GEMINI_URL, {
     method: "POST",
-    signal: AbortSignal.timeout(25000),   // si Gemini no contesta en 25 s, se corta y se avisa
+    signal: AbortSignal.timeout(GEMINI_ESPERA_MS),
     headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: sistema }] },
-      contents: contenidos,
-      tools: HERRAMIENTAS,
-      generationConfig: { maxOutputTokens: 2048 },
-    }),
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: sistema }] }, contents: contenidos, tools: GEMINI_TOOLS, generationConfig: { maxOutputTokens: 2048 } }),
   });
   const j = await res.json().catch(() => ({}));
   console.log(`Gemini ${MODELO}: HTTP ${res.status} en ${Date.now() - t0} ms`);
-  if (!res.ok) throw new ErrorGemini(res.status, j?.error?.message || `Gemini respondió ${res.status}`);
-  return j as { candidates?: { content?: Contenido; finishReason?: string }[] };
+  if (!res.ok) throw new ErrorIA(res.status, j?.error?.message || `Gemini respondió ${res.status}`);
+  return j as { candidates?: { content?: Contenido }[] };
 }
 
-function texto(c?: Contenido) {
-  return (c?.parts || []).filter((p) => typeof p.text === "string" && !p.thought).map((p) => p.text).join("").trim();
+async function conGemini(textos: Texto[], sistema: string, estado: Estado): Promise<string> {
+  const contenidos: Contenido[] = textos.map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }));
+  for (let vuelta = 0; vuelta < 4; vuelta++) {
+    const cand = (await llamarGemini(contenidos, sistema)).candidates?.[0];
+    if (!cand?.content) return RECHAZO;
+    contenidos.push({ role: "model", parts: cand.content.parts || [] });   // tal cual: conserva sus firmas de razonamiento
+    const llamadas = (cand.content.parts || []).filter((p) => p.functionCall);
+    if (!llamadas.length) {
+      return (cand.content.parts || []).filter((p) => typeof p.text === "string" && !p.thought).map((p) => p.text).join("").trim();
+    }
+    const respuestas: Parte[] = [];
+    for (const p of llamadas) {
+      const resultado = await ejecutar(p.functionCall!.name, p.functionCall!.args || {}, estado);
+      respuestas.push({ functionResponse: { name: p.functionCall!.name, response: { resultado } } });
+    }
+    contenidos.push({ role: "user", parts: respuestas });
+  }
+  return "";
+}
+
+/* ——— DeepSeek (API compatible con OpenAI) ——— */
+type MensajeDS = { role: string; content: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[]; tool_call_id?: string; [k: string]: unknown };
+
+const DEEPSEEK_TOOLS = [{
+  type: "function",
+  function: {
+    name: HERRAMIENTA.nombre,
+    description: HERRAMIENTA.descripcion,
+    parameters: { type: "object", properties: HERRAMIENTA.parametros, required: HERRAMIENTA.obligatorios, additionalProperties: false },
+  },
+}];
+
+async function llamarDeepSeek(mensajes: MensajeDS[]) {
+  const t0 = Date.now();
+  const res = await fetch(DEEPSEEK_URL, {
+    method: "POST",
+    signal: AbortSignal.timeout(25000),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${DEEPSEEK_API_KEY}` },
+    body: JSON.stringify({ model: DEEPSEEK_MODELO, messages: mensajes, tools: DEEPSEEK_TOOLS, max_tokens: 2048, thinking: { type: "disabled" } }),
+  });
+  const j = await res.json().catch(() => ({}));
+  console.log(`DeepSeek ${DEEPSEEK_MODELO}: HTTP ${res.status} en ${Date.now() - t0} ms`);
+  if (!res.ok) throw new ErrorIA(res.status, j?.error?.message || `DeepSeek respondió ${res.status}`);
+  return j as { choices?: { message?: MensajeDS }[] };
+}
+
+async function conDeepSeek(textos: Texto[], sistema: string, estado: Estado): Promise<string> {
+  const mensajes: MensajeDS[] = [{ role: "system", content: sistema }, ...textos.map((m) => ({ role: m.role, content: m.content }))];
+  for (let vuelta = 0; vuelta < 4; vuelta++) {
+    const msg = (await llamarDeepSeek(mensajes)).choices?.[0]?.message;
+    if (!msg) return RECHAZO;
+    mensajes.push(msg);   // tal cual, con sus tool_calls
+    if (!msg.tool_calls?.length) return (msg.content || "").trim();
+    for (const tc of msg.tool_calls) {
+      let args: Record<string, unknown> = {};
+      try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* argumentos rotos: pedir_reserva los rechazará */ }
+      mensajes.push({ role: "tool", tool_call_id: tc.id, content: await ejecutar(tc.function.name, args, estado) });
+    }
+  }
+  return "";
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
   if (req.method !== "POST") return json(req, 405, { error: "Solo POST" });
   if (ORIGENES.length && !ORIGENES.includes(req.headers.get("origin") || "")) return json(req, 403, { error: "Origen no permitido" });
-  if (!GEMINI_API_KEY) return json(req, 500, { error: "Falta la clave de Gemini" });
+  if (!GEMINI_API_KEY && !DEEPSEEK_API_KEY) return json(req, 500, { error: "Falta la clave de la IA" });
 
   /* Solo se aceptan textos de cliente y asistente, alternos, terminando en el cliente */
   let entrada: { role: string; content: string }[];
@@ -148,67 +243,43 @@ Deno.serve(async (req) => {
   } catch {
     return json(req, 400, { error: "JSON no válido" });
   }
-  const contenidos: Contenido[] = [];
+  const textos: Texto[] = [];
   for (const m of entrada.slice(-MAX_MENSAJES)) {
     if ((m?.role !== "user" && m?.role !== "assistant") || typeof m.content !== "string") return json(req, 400, { error: "Mensaje no válido" });
     const t = m.content.trim().slice(0, MAX_CARACTERES);
     if (!t) continue;
-    const rol = m.role === "user" ? "user" : "model";
-    const ultimo = contenidos[contenidos.length - 1];
-    if (ultimo && ultimo.role === rol) ultimo.parts[0].text += "\n" + t;
-    else contenidos.push({ role: rol, parts: [{ text: t }] });
+    const ultimo = textos[textos.length - 1];
+    if (ultimo && ultimo.role === m.role) ultimo.content += "\n" + t;
+    else textos.push({ role: m.role, content: t });
   }
-  while (contenidos.length && contenidos[0].role !== "user") contenidos.shift();
-  if (!contenidos.length || contenidos[contenidos.length - 1].role !== "user") return json(req, 400, { error: "Falta el mensaje del cliente" });
+  while (textos.length && textos[0].role !== "user") textos.shift();
+  if (!textos.length || textos[textos.length - 1].role !== "user") return json(req, 400, { error: "Falta el mensaje del cliente" });
 
   const hoy = hoyEnMadrid();
   const sistema = `${SISTEMA}\n\nHoy es ${hoy.dia}, ${hoy.iso} (hora de Madrid).`;
-  let reserva: Record<string, unknown> | null = null;
+  const estado: Estado = { reserva: null };
+  const listo = () => (estado.reserva ? "¡Listo! Hemos recibido tu petición. Te confirmaremos la mesa por teléfono o WhatsApp." : "");
 
+  let motor = "gemini";
   try {
-    /* Bucle corto: Gemini puede pedir guardar la reserva y luego contestar al cliente */
-    for (let vuelta = 0; vuelta < 4; vuelta++) {
-      const r = await gemini(contenidos, sistema);
-      const cand = r.candidates?.[0];
-      if (!cand?.content) {
-        return json(req, 200, { reply: "Perdona, con eso no puedo ayudarte. Para cualquier duda, llámanos al 633 45 06 54.", reserva });
-      }
-      // Se devuelve tal cual a Gemini en la siguiente vuelta (incluye sus firmas de razonamiento)
-      contenidos.push({ role: "model", parts: cand.content.parts || [] });
-      const llamadas = (cand.content.parts || []).filter((p) => p.functionCall);
-      if (!llamadas.length) {
-        const t = texto(cand.content);
-        return json(req, 200, { reply: t || (reserva ? "¡Listo! Hemos recibido tu petición." : "¿Me lo repites, por favor?"), reserva });
-      }
-      const respuestas: Parte[] = [];
-      for (const p of llamadas) {
-        const fc = p.functionCall!;
-        let resultado: string;
-        if (fc.name !== "crear_reserva") resultado = "ERROR: herramienta desconocida.";
-        else if (reserva) resultado = "Ya se ha guardado una reserva en esta conversación. No guardes otra.";
-        else {
-          const a = fc.args || {};
-          const datos = {
-            nombre: String(a.nombre ?? ""), personas: Math.round(Number(a.personas)), dia: String(a.dia ?? ""),
-            servicio: String(a.servicio ?? ""), hora: String(a.hora ?? ""), telefono: String(a.telefono ?? ""), notas: String(a.notas ?? ""),
-          };
-          const g = await pedirReserva(datos);
-          if (g.ok) {
-            reserva = { nombre: datos.nombre, personas: datos.personas, dia: datos.dia, servicio: datos.servicio, hora: datos.hora };
-            resultado = "Petición guardada como pendiente. El restaurante la confirmará por teléfono o WhatsApp.";
-          } else resultado = `ERROR: ${g.error}. La reserva NO se ha guardado.`;
-        }
-        respuestas.push({ functionResponse: { name: fc.name, response: { resultado } } });
-      }
-      contenidos.push({ role: "user", parts: respuestas });
+    let texto = "";
+    try {
+      if (!GEMINI_API_KEY) throw new ErrorIA(503, "Sin clave de Gemini");
+      texto = await conGemini(textos, sistema, estado);
+    } catch (e) {
+      /* Gemini saturado, caído o lento → DeepSeek, si hay clave */
+      if (!DEEPSEEK_API_KEY || !esSaturacion(e)) throw e;
+      console.log("Paso a DeepSeek:", e instanceof Error ? `${e.name}: ${e.message}` : e);
+      motor = "deepseek";
+      if (estado.reserva) texto = listo();   // la reserva ya se guardó con Gemini: no se repite
+      else texto = await conDeepSeek(textos, sistema, estado);
     }
-    return json(req, 200, { reply: reserva ? "¡Listo! Hemos recibido tu petición." : "Perdona, ¿me lo puedes repetir?", reserva });
+    return json(req, 200, { reply: texto || listo() || "¿Me lo repites, por favor?", reserva: estado.reserva, motor });
   } catch (e) {
-    console.error("Fallo del asistente:", e instanceof Error ? `${e.name}: ${e.message}` : e);
-    const ocupado = (e instanceof ErrorGemini && (e.status === 429 || e.status >= 500)) || (e instanceof Error && e.name === "TimeoutError");
-    return json(req, ocupado ? 503 : 500, {
-      error: ocupado ? "El asistente está ocupado ahora mismo" : "El asistente no está disponible",
-      reserva,
+    console.error(`Fallo del asistente (${motor}):`, e instanceof Error ? `${e.name}: ${e.message}` : e);
+    return json(req, esSaturacion(e) ? 503 : 500, {
+      error: esSaturacion(e) ? "El asistente está ocupado ahora mismo" : "El asistente no está disponible",
+      reserva: estado.reserva,
     });
   }
 });
