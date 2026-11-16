@@ -53,6 +53,18 @@ supabase functions deploy chat --no-verify-jwt
 
 También se puede hacer sin CLI desde el panel de Supabase: **Edge Functions → Deploy a new function → Via Editor**, nombre `chat`, pegar `supabase/functions/chat/index.ts`, desactivar **Verify JWT** en sus ajustes, y poner los secretos en **Edge Functions → Secrets**.
 
+## 4b. Bot de Telegram (opcional): clientes y avisos
+
+El mismo asistente atiende por Telegram, como si fuera el WhatsApp del restaurante, y avisa al restaurante de cada petición nueva.
+
+1. Ejecuta `supabase/telegram.sql` en el SQL Editor (después de `schema.sql`).
+2. En Telegram, habla con **@BotFather** → `/newbot` → nombre y usuario del bot. Te da un token.
+3. En **Edge Functions → Secrets**: `TELEGRAM_BOT_TOKEN` = el token, y `TELEGRAM_ADMIN` = tu usuario de Telegram (sin @).
+4. Conecta el bot abriendo una vez `https://<proyecto>.supabase.co/functions/v1/chat?telegram_setup=1`.
+5. Desde tu cuenta de Telegram, escribe `/avisos` al bot: ese chat recibirá un aviso por cada petición (web, chat o Telegram).
+
+Las reservas del bot entran como «Por confirmar» y «Vía Telegram».
+
 ## 5. Publicar en GitHub Pages
 
 1. Sube el contenido de esta carpeta `web` a un repositorio de GitHub.

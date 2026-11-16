@@ -13,6 +13,11 @@
 //   GEMINI_MODEL       opcional: modelo de Gemini (por defecto gemini-3.5-flash-lite)
 //   DEEPSEEK_MODEL     opcional: modelo de DeepSeek (por defecto deepseek-flash, V4.1 Flash)
 //   GEMINI_ESPERA_MS   opcional: cuánto esperar a Gemini antes de pasar a DeepSeek (por defecto 12000)
+//   TELEGRAM_BOT_TOKEN opcional: token del bot de Telegram (clientes por Telegram + avisos al restaurante)
+//   TELEGRAM_ADMIN     opcional: usuario de Telegram del restaurante (sin @); solo él puede activar los avisos
+//
+// Rutas: POST /chat (web) · POST /chat?telegram=1 (webhook) · GET /chat?telegram_setup=1 (conectar el bot)
+//        POST /chat?aviso=1 (lo llama la base de datos al entrar una petición)
 // SUPABASE_URL y las claves internas (SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY) los pone Supabase solo.
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
@@ -26,6 +31,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 // Clave para llamar a pedir_reserva(): la anon clásica si existe; si no, la de servidor que Supabase
 // pone en la función (nunca sale de aquí). Las dos pasan por las mismas validaciones de la base de datos.
 const SUPABASE_KEY = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const TG_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") || "";
+const TG_ADMIN = (Deno.env.get("TELEGRAM_ADMIN") || "").replace(/^@/, "").trim().toLowerCase();
 const ORIGENES = (Deno.env.get("ALLOWED_ORIGIN") || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 // Límites para que nadie gaste la clave con conversaciones eternas
@@ -80,12 +88,12 @@ function json(req: Request, status: number, data: unknown) {
 }
 
 /* Guarda la petición con la misma función pública que usa el formulario (valida días, horas y límites) */
-async function pedirReserva(r: { nombre: string; personas: number; dia: string; servicio: string; hora: string; telefono: string; notas: string }) {
+async function pedirReserva(r: { nombre: string; personas: number; dia: string; servicio: string; hora: string; telefono: string; notas: string }, origen = "Chat") {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/pedir_reserva`, {
     method: "POST",
     signal: AbortSignal.timeout(15000),
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ p_n: r.nombre, p_p: r.personas, p_d: r.dia, p_s: r.servicio, p_h: r.hora, p_x: r.notas || "", p_tel: r.telefono, p_origen: "Chat" }),
+    body: JSON.stringify({ p_n: r.nombre, p_p: r.personas, p_d: r.dia, p_s: r.servicio, p_h: r.hora, p_x: r.notas || "", p_tel: r.telefono, p_origen: origen }),
   });
   if (res.ok) return { ok: true as const };
   const err = await res.json().catch(() => ({}));
@@ -109,7 +117,7 @@ const HERRAMIENTA = {
 };
 
 type Texto = { role: "user" | "assistant"; content: string };
-type Estado = { reserva: Record<string, unknown> | null };
+type Estado = { reserva: Record<string, unknown> | null; origen: string };
 
 /* Ejecuta crear_reserva. Si ya se guardó una en esta conversación (con cualquiera de las dos IA), no guarda otra. */
 async function ejecutar(nombre: string, args: Record<string, unknown>, estado: Estado): Promise<string> {
@@ -119,7 +127,7 @@ async function ejecutar(nombre: string, args: Record<string, unknown>, estado: E
     nombre: String(args.nombre ?? ""), personas: Math.round(Number(args.personas)), dia: String(args.dia ?? ""),
     servicio: String(args.servicio ?? ""), hora: String(args.hora ?? ""), telefono: String(args.telefono ?? ""), notas: String(args.notas ?? ""),
   };
-  const g = await pedirReserva(datos);
+  const g = await pedirReserva(datos, estado.origen);
   if (!g.ok) return `ERROR: ${g.error}. La reserva NO se ha guardado.`;
   estado.reserva = { nombre: datos.nombre, personas: datos.personas, dia: datos.dia, servicio: datos.servicio, hora: datos.hora };
   return "Petición guardada como pendiente. El restaurante la confirmará por teléfono o WhatsApp.";
@@ -229,7 +237,162 @@ async function conDeepSeek(textos: Texto[], sistema: string, estado: Estado): Pr
   return "";
 }
 
+/* ——— Responder: Gemini primero; si está saturado, caído o lento, DeepSeek ——— */
+async function responder(textos: Texto[], sistema: string, estado: Estado): Promise<{ texto: string; motor: string }> {
+  const listo = () => (estado.reserva ? "¡Listo! Hemos recibido tu petición. Te confirmaremos la mesa por teléfono o WhatsApp." : "");
+  try {
+    if (!GEMINI_API_KEY) throw new ErrorIA(503, "Sin clave de Gemini");
+    return { texto: (await conGemini(textos, sistema, estado)) || listo(), motor: "gemini" };
+  } catch (e) {
+    if (!DEEPSEEK_API_KEY || !esSaturacion(e)) throw e;
+    console.log("Paso a DeepSeek:", e instanceof Error ? `${e.name}: ${e.message}` : e);
+    if (estado.reserva) return { texto: listo(), motor: "deepseek" };   // ya guardada con Gemini: no se repite
+    return { texto: (await conDeepSeek(textos, sistema, estado)) || listo(), motor: "deepseek" };
+  }
+}
+
+function sistemaDeHoy(extra = "") {
+  const hoy = hoyEnMadrid();
+  return `${SISTEMA}${extra ? "\n\n" + extra : ""}\n\nHoy es ${hoy.dia}, ${hoy.iso} (hora de Madrid).`;
+}
+
+/* ——— Base de datos con la clave de servidor (solo dentro de la función) ——— */
+async function bd(ruta: string, init: RequestInit = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${ruta}`, {
+    ...init,
+    signal: AbortSignal.timeout(10000),
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation", ...(init.headers || {}) },
+  });
+  const j = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(`BD ${res.status}: ${JSON.stringify(j)}`);
+  return j;
+}
+
+/* ——— Telegram ——— */
+async function tg(metodo: string, datos: unknown) {
+  const res = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/${metodo}`, {
+    method: "POST",
+    signal: AbortSignal.timeout(10000),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  return await res.json().catch(() => ({ ok: false }));
+}
+/* Secreto del webhook: se deriva del token, así nadie más puede hacerse pasar por Telegram */
+async function secretoWebhook() {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("porta-di-mare:" + TG_TOKEN));
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 48);
+}
+const URL_FUNCION = `${SUPABASE_URL}/functions/v1/chat`;
+const PANEL = "https://tutuifc.github.io/porta-di-mare/panel.html";
+
+const BIENVENIDA: Record<string, string> = {
+  es: "¡Hola! Soy el asistente de Porta di Mare 🍕 Te ayudo a pedir mesa o a resolver dudas sobre la carta y el horario. ¿Para qué día y cuántas personas?",
+  ca: "Hola! Sóc l'assistent de Porta di Mare 🍕 T'ajudo a demanar taula o amb dubtes sobre la carta i l'horari. Per a quin dia i quantes persones?",
+  en: "Hi! I'm the Porta di Mare assistant 🍕 I can help you book a table or answer questions about the menu and opening hours. Which day, and how many people?",
+};
+const CANAL_TELEGRAM = "Canal: el cliente te escribe por mensajería (Telegram, como si fuera el WhatsApp del restaurante). Mensajes cortos. No ves su número de teléfono: pídeselo igualmente para la reserva.";
+
+async function atenderTelegram(update: { message?: { chat: { id: number; type: string }; from?: { username?: string; language_code?: string; first_name?: string }; text?: string } }) {
+  const m = update.message;
+  if (!m?.text || m.chat.type !== "private") return;
+  const chat = m.chat.id, texto = m.text.trim().slice(0, MAX_CARACTERES);
+  const idioma = (m.from?.language_code || "es").slice(0, 2);
+  const responde = (t: string) => tg("sendMessage", { chat_id: chat, text: t });
+
+  if (/^\/start\b/.test(texto) || /^\/nueva\b/.test(texto)) {
+    await bd(`telegram_mensajes?chat_id=eq.${chat}`, { method: "DELETE" });
+    return responde(BIENVENIDA[idioma] || BIENVENIDA.es);
+  }
+  if (/^\/avisos\b/.test(texto)) {
+    const usuario = (m.from?.username || "").toLowerCase();
+    if (!TG_ADMIN || usuario !== TG_ADMIN) return responde("Este comando es solo para el restaurante.");
+    await bd("ajustes?id=eq.1", { method: "PATCH", body: JSON.stringify({ telegram_aviso_chat: chat }) });
+    return responde("✅ Avisos activados. A partir de ahora te escribiré aquí cada vez que entre una petición de reserva (web, chat o Telegram).");
+  }
+
+  /* Conversación: lo de las últimas 12 horas, como máximo 20 mensajes */
+  const desde = new Date(Date.now() - 12 * 3600 * 1000).toISOString();
+  const previos = (await bd(`telegram_mensajes?select=role,content&chat_id=eq.${chat}&creada=gte.${encodeURIComponent(desde)}&order=id.desc&limit=20`)) as Texto[];
+  const textos: Texto[] = [];
+  for (const p of [...previos].reverse().concat([{ role: "user", content: texto }])) {
+    const u = textos[textos.length - 1];
+    if (u && u.role === p.role) u.content += "\n" + p.content; else textos.push({ role: p.role, content: p.content });
+  }
+  while (textos.length && textos[0].role !== "user") textos.shift();
+
+  tg("sendChatAction", { chat_id: chat, action: "typing" });
+  const estado: Estado = { reserva: null, origen: "Telegram" };
+  let respuesta: string;
+  try {
+    respuesta = (await responder(textos, sistemaDeHoy(CANAL_TELEGRAM), estado)).texto || "¿Me lo repites, por favor?";
+  } catch (e) {
+    console.error("Fallo del asistente (Telegram):", e instanceof Error ? `${e.name}: ${e.message}` : e);
+    respuesta = "Ahora mismo no puedo responder. Llámanos al 633 45 06 54 y te atendemos.";
+  }
+  await bd("telegram_mensajes", { method: "POST", body: JSON.stringify([
+    { chat_id: chat, role: "user", content: texto },
+    { chat_id: chat, role: "assistant", content: respuesta },
+  ]) });
+  await responde(respuesta);
+}
+
+/* Aviso al restaurante de una petición nueva. Lo llama la base de datos al guardar una reserva «pendiente».
+   Cada reserva se avisa una sola vez y solo en sus primeros 10 minutos: llamarlo de más no sirve para nada. */
+const DIAS_CORTOS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+async function avisar(id: string) {
+  if (!TG_TOKEN || !/^[0-9a-f-]{36}$/i.test(id)) return "nada";
+  const desde = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const filas = (await bd(`reservas?id=eq.${id}&avisada=eq.false&estado=eq.pendiente&creada=gte.${encodeURIComponent(desde)}`,
+    { method: "PATCH", body: JSON.stringify({ avisada: true }) })) as Record<string, string | number>[];
+  const r = filas?.[0];
+  if (!r) return "ya avisada o no válida";
+  const aj = (await bd("ajustes?select=telegram_aviso_chat&id=eq.1")) as { telegram_aviso_chat: number | null }[];
+  const chat = aj?.[0]?.telegram_aviso_chat;
+  if (!chat) return "sin chat de avisos";
+  const d = new Date(String(r.d) + "T12:00:00Z");
+  const lineas = [
+    `🔔 Nueva petición · vía ${r.origen}`,
+    `${DIAS_CORTOS[d.getUTCDay()]} ${d.getUTCDate()}/${d.getUTCMonth() + 1} · ${r.s} ${r.h} · ${r.p} pax`,
+    `${r.n}${r.tel ? " · " + r.tel : ""}`,
+    r.x ? `Notas: ${r.x}` : "",
+    `Confírmala en el panel: ${PANEL}`,
+  ].filter(Boolean);
+  const res = await tg("sendMessage", { chat_id: chat, text: lineas.join("\n"), link_preview_options: { is_disabled: true } });
+  return res.ok ? "avisado" : "Telegram no aceptó el aviso";
+}
+
 Deno.serve(async (req) => {
+  const q = new URL(req.url).searchParams;
+
+  /* Conectar el bot (una vez): registra el webhook con un secreto derivado del token */
+  if (q.get("telegram_setup") === "1") {
+    if (!TG_TOKEN) return new Response("Falta TELEGRAM_BOT_TOKEN", { status: 400 });
+    const r = await tg("setWebhook", { url: `${URL_FUNCION}?telegram=1`, secret_token: await secretoWebhook(), allowed_updates: ["message"], drop_pending_updates: true });
+    await tg("setMyCommands", { commands: [{ command: "start", description: "Empezar de nuevo" }, { command: "nueva", description: "Nueva conversación" }] });
+    const yo = await tg("getMe", {});
+    return Response.json({ webhook: r.ok ? "conectado" : r.description, bot: yo?.result?.username || null });
+  }
+
+  /* Mensajes de Telegram: solo si traen el secreto del webhook */
+  if (q.get("telegram") === "1") {
+    if (!TG_TOKEN || req.headers.get("x-telegram-bot-api-secret-token") !== (await secretoWebhook())) return new Response("no", { status: 401 });
+    try { await atenderTelegram(await req.json()); } catch (e) { console.error("Telegram:", e instanceof Error ? e.message : e); }
+    return new Response("ok");   // siempre 200: si no, Telegram reintenta el mismo mensaje
+  }
+
+  /* Aviso de nueva petición (lo llama el disparador de la base de datos) */
+  if (q.get("aviso") === "1" && req.method === "POST") {
+    try {
+      const b = await req.json();
+      return Response.json({ resultado: await avisar(String(b?.id || "")) });
+    } catch (e) {
+      console.error("Aviso:", e instanceof Error ? e.message : e);
+      return Response.json({ resultado: "error" }, { status: 500 });
+    }
+  }
+
+  /* ——— Chat de la web ——— */
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
   if (req.method !== "POST") return json(req, 405, { error: "Solo POST" });
   if (ORIGENES.length && !ORIGENES.includes(req.headers.get("origin") || "")) return json(req, 403, { error: "Origen no permitido" });
@@ -255,28 +418,12 @@ Deno.serve(async (req) => {
   while (textos.length && textos[0].role !== "user") textos.shift();
   if (!textos.length || textos[textos.length - 1].role !== "user") return json(req, 400, { error: "Falta el mensaje del cliente" });
 
-  const hoy = hoyEnMadrid();
-  const sistema = `${SISTEMA}\n\nHoy es ${hoy.dia}, ${hoy.iso} (hora de Madrid).`;
-  const estado: Estado = { reserva: null };
-  const listo = () => (estado.reserva ? "¡Listo! Hemos recibido tu petición. Te confirmaremos la mesa por teléfono o WhatsApp." : "");
-
-  let motor = "gemini";
+  const estado: Estado = { reserva: null, origen: "Chat" };
   try {
-    let texto = "";
-    try {
-      if (!GEMINI_API_KEY) throw new ErrorIA(503, "Sin clave de Gemini");
-      texto = await conGemini(textos, sistema, estado);
-    } catch (e) {
-      /* Gemini saturado, caído o lento → DeepSeek, si hay clave */
-      if (!DEEPSEEK_API_KEY || !esSaturacion(e)) throw e;
-      console.log("Paso a DeepSeek:", e instanceof Error ? `${e.name}: ${e.message}` : e);
-      motor = "deepseek";
-      if (estado.reserva) texto = listo();   // la reserva ya se guardó con Gemini: no se repite
-      else texto = await conDeepSeek(textos, sistema, estado);
-    }
-    return json(req, 200, { reply: texto || listo() || "¿Me lo repites, por favor?", reserva: estado.reserva, motor });
+    const { texto, motor } = await responder(textos, sistemaDeHoy(), estado);
+    return json(req, 200, { reply: texto || "¿Me lo repites, por favor?", reserva: estado.reserva, motor });
   } catch (e) {
-    console.error(`Fallo del asistente (${motor}):`, e instanceof Error ? `${e.name}: ${e.message}` : e);
+    console.error("Fallo del asistente:", e instanceof Error ? `${e.name}: ${e.message}` : e);
     return json(req, esSaturacion(e) ? 503 : 500, {
       error: esSaturacion(e) ? "El asistente está ocupado ahora mismo" : "El asistente no está disponible",
       reserva: estado.reserva,
